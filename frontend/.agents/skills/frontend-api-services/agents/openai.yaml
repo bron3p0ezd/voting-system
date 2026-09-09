@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend API Services"
+  short_description: "Build typed API services, DTO mappings, and mocks"
+  default_prompt: "Use $frontend-api-services to integrate this API contract through the existing service layer."

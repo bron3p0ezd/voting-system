@@ -12,6 +12,13 @@
 - Ограничить повторное голосование на базовом уровне, достаточном для обычного пользователя, без обещания полной защиты от обхода.
 - Администратору создавать опросы и просматривать обезличенные результаты.
 
+Текущий backend реализует получение публичного опроса, учёт голоса через
+`POST /api/v1/polls/{poll_id}/votes`, создание опроса через
+`POST /api/v1/admin/polls` и получение списка опросов через
+`GET /api/v1/admin/polls`, а также агрегированные результаты через
+`GET /api/v1/admin/polls/{poll_id}/results`. Голос и опрос сохраняются синхронно: `201 Created`
+возвращается только после commit транзакции.
+
 ## Структура
 
 ```text
@@ -75,16 +82,16 @@ GET /api/v1/polls/{poll_id}
 }
 ```
 
-При первом запросе сервер может установить подписанную cookie участника.
+При первом запросе без корректной cookie сервер устанавливает cookie `participant_token`.
+Её значение — подписанный JWT с payload вида:
 
-Cookie:
-
-```text
-HttpOnly
-Secure
+```json
+{
+  "sub": "7cc7444e-9809-4bc4-bc04-6ca1f7522e77"
+}
 ```
 
-`Secure` используется при работе через HTTPS.
+`sub` — случайный UUID технического участника, а не идентификатор пользователя.
 
 ### Status codes
 
@@ -99,8 +106,7 @@ Secure
 ```http
 POST /api/v1/polls/{poll_id}/votes
 ```
-
-Для запроса требуется ранее установленная cookie участника.
+Для запроса требуется ранее установленная cookie `participant_token`.
 
 ### Path parameters
 
@@ -126,9 +132,9 @@ POST /api/v1/polls/{poll_id}/votes
 
 `option_ids` должны быть уникальными. Все варианты должны принадлежать указанному опросу.
 
-Для `single`: ```text option_ids.length = 1 ```
+Для `single`: ```option_ids.length = 1```
 
-Для `multiple`:  ```text min_selections <= option_ids.length <= max_selections ```
+Для `multiple`:  ```min_selections <= option_ids.length <= max_selections```
 
 ### Response
 
@@ -137,7 +143,6 @@ POST /api/v1/polls/{poll_id}/votes
 ```json
 {
   "poll_id": "UUID",
-  "status": "counted",
   "counted_at": "datetime"
 }
 ```
@@ -157,7 +162,10 @@ POST /api/v1/polls/{poll_id}/votes
 
 # Admin API
 
-Все административные endpoints требуют аутентификации администратора.
+Все административные endpoints требуют аутентификации администратора. На этапе
+текущей реализации это правило временно не применяется к
+`GET /api/v1/admin/polls` и `POST /api/v1/admin/polls`: endpoints доступны без
+аутентификации, пока не будет добавлена авторизация.
 
 При отсутствии или некорректной аутентификации: ```401 Unauthorized ```
 
@@ -292,8 +300,6 @@ GET /api/v1/admin/polls
 | Код | Описание |
 |---|---|
 | `200` | Список опросов получен |
-| `401` | Нет аутентификации |
-| `403` | Недостаточно прав |
 
 ## Получить результаты
 

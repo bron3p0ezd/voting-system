@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python FastAPI Routers"
+  short_description: "Build thin versioned FastAPI endpoint contracts"
+  default_prompt: "Use $python-routers to add this FastAPI endpoint through the existing service factory."

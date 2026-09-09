@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Architecture"
+  short_description: "Preserve the frontend's layered React architecture"
+  default_prompt: "Use $frontend-architecture to place this feature in the existing frontend layers."
