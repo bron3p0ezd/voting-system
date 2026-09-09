@@ -4,7 +4,7 @@ from fastapi import Request
 from fastapi.responses import Response
 
 from apps.auth.policies import ParticipantTokenPolicy
-from apps.pool.services import ParticipantTokenIssuer
+from apps.poll.services import ParticipantTokenIssuer
 from apps.auth.services import JWTService
 
 

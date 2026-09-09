@@ -6,7 +6,7 @@ from fastapi.responses import Response
 
 from settings.services import Service
 
-from apps.pool.dtos import PollDTO
+from apps.poll.dtos import PollDTO, VoteDTO
 
 
 class PollService(Service):
@@ -17,3 +17,18 @@ class PollService(Service):
 class ParticipantTokenIssuer(Service):
     @abstractmethod
     def issue_if_needed(self, request: Request, response: Response) -> None: ...
+
+
+class ParticipantTokenVerifier(Service):
+    @abstractmethod
+    def get_participant_id(self, request: Request) -> UUID: ...
+
+
+class VoteService(Service):
+    @abstractmethod
+    async def record_vote(
+        self,
+        poll_id: UUID,
+        participant_id: UUID,
+        option_ids: list[UUID],
+    ) -> VoteDTO: ...

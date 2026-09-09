@@ -11,7 +11,7 @@ class JWTServiceImpl(JWTService):
         return encode(
             {"sub": str(participant_id)},
             settings.PARTICIPANT_JWT_SECRET,
-            algorithm=settings.PARTICIPANT_JWT_SECRET,
+            algorithm=settings.JWT_ALG,
         )
 
     def get_participant_id(self, token: str) -> UUID | None:
@@ -19,7 +19,7 @@ class JWTServiceImpl(JWTService):
             payload = decode(
                 token,
                 settings.PARTICIPANT_JWT_SECRET,
-                algorithms=[settings.PARTICIPANT_JWT_SECRET],
+                algorithms=[settings.JWT_ALG],
             )
             return UUID(payload["sub"])
         except (InvalidTokenError, KeyError, TypeError, ValueError):

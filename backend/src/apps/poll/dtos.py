@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from apps.pool.models import SelectionType
+from apps.poll.models import SelectionType
 
 
 @dataclass(frozen=True)
@@ -22,3 +22,9 @@ class PollDTO:
     starts_at: datetime
     ends_at: datetime
     options: list[PollOptionDTO]
+
+
+@dataclass(frozen=True)
+class VoteDTO:
+    poll_id: UUID
+    counted_at: datetime

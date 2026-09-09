@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from apps.pool.dtos import PollDTO
-from apps.pool.exceptions import PollNotFoundException, PollUnavailableException
-from apps.pool.repositories import PollRepository
-from apps.pool.services import PollService
+from apps.poll.dtos import PollDTO
+from apps.poll.exceptions import PollNotFoundException, PollUnavailableException
+from apps.poll.repositories import PollRepository
+from apps.poll.services import PollService
 
 
 class PollServiceImpl(PollService):

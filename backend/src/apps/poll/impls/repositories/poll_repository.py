@@ -3,9 +3,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from apps.pool.dtos import PollDTO, PollOptionDTO
-from apps.pool.models import Poll
-from apps.pool.repositories import PollRepository
+from apps.poll.dtos import PollDTO, PollOptionDTO
+from apps.poll.models import Poll
+from apps.poll.repositories import PollRepository
 from settings.alchemy_repositories import AlchemyRepository
 
 
