@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     OPENAPI_URL_ENABLED: Optional[str] = None
 
     ALLOW_ORIGINS: list[str] = [
-        "",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
 
     @property
