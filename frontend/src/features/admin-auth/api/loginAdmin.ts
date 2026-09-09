@@ -1,5 +1,5 @@
-import { request } from './http'
-import { saveAdminToken } from './adminSession'
+import { request } from '../../../shared/api/http'
+import { saveAdminToken } from '../model/session'
 
 interface AdminTokenResponse {
   access_token: string

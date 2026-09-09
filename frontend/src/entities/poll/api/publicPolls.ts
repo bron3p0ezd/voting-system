@@ -1,5 +1,5 @@
-import { request } from './http'
-import type { Poll, VoteConfirmation } from '../types/poll'
+import type { Poll, VoteConfirmation } from '../model/types'
+import { request } from '../../../shared/api/http'
 
 export function getPublicPoll(pollId: string): Promise<Poll> {
   return request<Poll>(`/polls/${pollId}`)
