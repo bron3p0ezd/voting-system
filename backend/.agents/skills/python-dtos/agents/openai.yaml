@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python DTOs and Schemas"
+  short_description: "Design internal DTOs and FastAPI transport schemas"
+  default_prompt: "Use $python-dtos to define the correct DTO or HTTP schema for this backend change."

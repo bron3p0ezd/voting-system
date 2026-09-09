@@ -1,0 +1,76 @@
+x-local-values:
+  database_host: &database_host postgres
+  database_port: &database_port 5432
+  database_name: &database_name voting
+  database_user: &database_user voting
+  database_password: &database_password voting
+  jwt_algorithm: &jwt_algorithm HS256
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: *database_name
+      POSTGRES_USER: *database_user
+      POSTGRES_PASSWORD: *database_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voting -d voting"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DB_HOST: *database_host
+      DB_PORT: *database_port
+      DB_USER: *database_user
+      DB_PASS: *database_password
+      DB_NAME: *database_name
+      ADMIN_JWT_SECRET: local-admin-secret-change-before-production
+      PARTICIPANT_JWT_SECRET: local-participant-secret-change-before-production
+      JWT_ALG: *jwt_algorithm
+      TEST_DB_HOST: *database_host
+      TEST_DB_PORT: *database_port
+      TEST_DB_USER: *database_user
+      TEST_DB_PASS: *database_password
+      TEST_DB_NAME: *database_name
+      TEST_ADMIN_JWT_SECRET: local-test-admin-secret
+      TEST_PARTICIPANT_JWT_SECRET: local-test-participant-secret
+      TEST_JWT_ALG: *jwt_algorithm
+      ALLOW_ORIGINS: '["http://localhost","http://127.0.0.1"]'
+      DOCS_URL_ENABLED: /docs
+      REDOC_URL_ENABLED: /redoc
+      OPENAPI_URL_ENABLED: /openapi.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://127.0.0.1/api/v1
+    volumes:
+      - frontend_dist:/app/dist
+    command: ["sh", "-c", "true"]
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_completed_successfully
+    volumes:
+      - ./web-server/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - frontend_dist:/usr/share/nginx/html:ro
+
+volumes:
+  postgres_data:
+  frontend_dist:

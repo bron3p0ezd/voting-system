@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Services and UOW"
+  short_description: "Implement business services and transaction boundaries"
+  default_prompt: "Use $python-services to implement this service workflow with the correct UOW boundary."

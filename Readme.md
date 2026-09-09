@@ -12,6 +12,15 @@
 - Ограничить повторное голосование на базовом уровне, достаточном для обычного пользователя, без обещания полной защиты от обхода.
 - Администратору создавать опросы и просматривать обезличенные результаты.
 
+## Технологии и причины выбора
+
+| Часть | Технологии | Почему выбраны |
+|---|---|---|
+| Backend | Python 3.13, FastAPI, Pydantic | FastAPI даёт типизированные HTTP-контракты и автоматическую OpenAPI-документацию, а Pydantic валидирует входные данные до выполнения бизнес-логики. |
+| Данные | PostgreSQL, SQLAlchemy 2.0 async, asyncpg, Alembic | PostgreSQL поддерживает транзакции и уникальные ограничения для конкурентно-безопасного базового учёта одного голоса; SQLAlchemy отделяет работу с БД от доменной логики, а Alembic версионирует схему. |
+| Frontend | React, TypeScript, Vite, Tailwind CSS | React подходит для интерактивных форм голосования и администрирования, TypeScript описывает контракты API на клиенте, Vite упрощает локальную разработку и сборку, Tailwind CSS — единообразное оформление без отдельного набора CSS-компонентов. |
+| Развёртывание | Docker Compose, nginx | Compose воспроизводимо поднимает локальные PostgreSQL, API и интерфейс; nginx отдаёт собранный frontend и проксирует запросы `/api/` к backend через единый адрес. |
+
 ## Структура
 
 ```text
@@ -19,26 +28,92 @@ voting-system/
 ├── AGENTS.md       # Общие правила работы агентов
 ├── README.md       # Описание проекта и задания
 ├── backend/        # API, бизнес-логика и хранение данных
-└── frontend/       # Опциональный пользовательский интерфейс
+├── frontend/       # Пользовательский интерфейс голосования и администрирования
+└── web-server/     # Конфигурация nginx для раздачи frontend и проксирования API
 ```
 
-# Voting System API
+## Туториал: запуск через Docker Compose
 
-Базовый URL: ``` /api/v1 ```
+```powershell
+docker compose up --build -d
+docker compose ps
+```
 
-Все запросы и ответы используют:  ``` Content-Type: application/json ```
+| Назначение | Адрес |
+|---|---|
+| Интерфейс | `http://127.0.0.1/` |
+| Администрирование | `http://127.0.0.1/admin/polls` |
+| API через nginx | `http://127.0.0.1/api/v1` |
+| Health check | `http://127.0.0.1/api/health` |
+| OpenAPI | `http://127.0.0.1/docs` |
 
-## Ошибки
+## Туториал: ручной запуск
 
-- ``` 400 Bad Request ```  — бизнес-правила запроса нарушены;
-- ``` 401 Unauthorized ```  — нет или невалидна аутентификация/cookie;
-- ``` 403 Forbidden ```  — недостаточно прав;
-- ``` 404 Not Found ```  — ресурс не найден;
-- ``` 409 Conflict ```  — повторное голосование;
-- ``` 410 Gone ```  — голосование ещё не началось, завершилось или ресурс больше недоступен;
-- ``` 422 Unprocessable Entity ```  — ошибка структурной валидации запроса от Pydantic.
+Для разработки без контейнеров нужны Python 3.13, PostgreSQL и Node.js 22 или
+новее. Откройте два PowerShell-окна: одно для backend, другое для frontend.
 
-# Public API
+### 1. Подготовьте PostgreSQL и backend
+
+Создайте пустую базу PostgreSQL и пользователя с правами на неё. Затем создайте
+`backend/src/envs/.env` в UTF-8 без BOM. Этот файл содержит локальные секреты и
+не должен попадать в Git. Все перечисленные параметры обязательны:
+
+```dotenv
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=voting
+DB_PASS=replace-with-local-password
+DB_NAME=voting
+ADMIN_JWT_SECRET=replace-with-random-local-secret
+PARTICIPANT_JWT_SECRET=replace-with-random-local-secret
+JWT_ALG=HS256
+TEST_DB_HOST=127.0.0.1
+TEST_DB_PORT=5432
+TEST_DB_USER=voting
+TEST_DB_PASS=replace-with-local-password
+TEST_DB_NAME=voting_test
+TEST_ADMIN_JWT_SECRET=replace-with-random-local-test-secret
+TEST_PARTICIPANT_JWT_SECRET=replace-with-random-local-test-secret
+TEST_JWT_ALG=HS256
+ALLOW_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
+DOCS_URL_ENABLED=/docs
+REDOC_URL_ENABLED=/redoc
+OPENAPI_URL_ENABLED=/openapi.json
+```
+
+Из каталога `backend` установите зависимости, примените миграции и запустите
+сервер:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m alembic upgrade head
+Set-Location src
+..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Проверьте запуск запросом к `http://127.0.0.1:8000/api/health`. При включённых
+в файле окружения настройках OpenAPI доступна по `http://127.0.0.1:8000/docs`.
+
+### 2. Запустите frontend
+
+Во втором PowerShell-окне выполните:
+
+```powershell
+Set-Location frontend
+npm ci
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+npm run dev
+```
+
+Откройте адрес, который напечатает Vite (по умолчанию
+`http://localhost:5173`). Административная страница находится по пути
+`/admin/polls`; публичная страница опроса — по пути `/poll/<poll_id>/vote`.
+Перед изменением постоянной конфигурации frontend сверяйтесь с
+`frontend/.env.example`; переменные с префиксом `VITE_` не подходят для
+секретов.
+
+## Public API
 
 ## Получить опрос
 
@@ -75,16 +150,16 @@ GET /api/v1/polls/{poll_id}
 }
 ```
 
-При первом запросе сервер может установить подписанную cookie участника.
+При первом запросе без корректной cookie сервер устанавливает cookie `participant_token`.
+Её значение — подписанный JWT с payload вида:
 
-Cookie:
-
-```text
-HttpOnly
-Secure
+```json
+{
+  "sub": "7cc7444e-9809-4bc4-bc04-6ca1f7522e77"
+}
 ```
 
-`Secure` используется при работе через HTTPS.
+`sub` — случайный UUID технического участника, а не идентификатор пользователя.
 
 ### Status codes
 
@@ -99,8 +174,7 @@ Secure
 ```http
 POST /api/v1/polls/{poll_id}/votes
 ```
-
-Для запроса требуется ранее установленная cookie участника.
+Для запроса требуется ранее установленная cookie `participant_token`.
 
 ### Path parameters
 
@@ -126,9 +200,9 @@ POST /api/v1/polls/{poll_id}/votes
 
 `option_ids` должны быть уникальными. Все варианты должны принадлежать указанному опросу.
 
-Для `single`: ```text option_ids.length = 1 ```
+Для `single`: ```option_ids.length = 1```
 
-Для `multiple`:  ```text min_selections <= option_ids.length <= max_selections ```
+Для `multiple`:  ```min_selections <= option_ids.length <= max_selections```
 
 ### Response
 
@@ -137,7 +211,6 @@ POST /api/v1/polls/{poll_id}/votes
 ```json
 {
   "poll_id": "UUID",
-  "status": "counted",
   "counted_at": "datetime"
 }
 ```
@@ -150,18 +223,12 @@ POST /api/v1/polls/{poll_id}/votes
 |---|---|
 | `201` | Голос учтён |
 | `400` | Некорректный выбор вариантов |
-| `401` | Cookie отсутствует или недействительна |
+| `401` | Cookie отсутствует или недействительна; обновите страницу для получения новой cookie |
 | `404` | Опрос не найден |
 | `409` | Участник уже проголосовал |
 | `410` | Голосование ещё не началось или уже завершилось |
 
-# Admin API
-
-Все административные endpoints требуют аутентификации администратора.
-
-При отсутствии или некорректной аутентификации: ```401 Unauthorized ```
-
-При недостаточных правах: ```403 Forbidden ```
+## Admin API
 
 ## Создать опрос
 
@@ -251,8 +318,7 @@ ends_at > starts_at
 |---|---|
 | `201` | Опрос создан |
 | `400` | Ошибка валидации |
-| `401` | Нет аутентификации |
-| `403` | Недостаточно прав |
+| `422` | Ошибка структурной валидации запроса |
 
 ## Получить список опросов
 
@@ -292,8 +358,6 @@ GET /api/v1/admin/polls
 | Код | Описание |
 |---|---|
 | `200` | Список опросов получен |
-| `401` | Нет аутентификации |
-| `403` | Недостаточно прав |
 
 ## Получить результаты
 
@@ -306,18 +370,6 @@ GET /api/v1/admin/polls/{poll_id}/results
 | Параметр | Тип | Описание |
 |---|---|---|
 | `poll_id` | UUID | Идентификатор опроса |
-
-### Query parameters
-
-| Параметр | Тип | Default | Описание |
-|---|---|---|---|
-| `include_empty` | boolean | `true` | Включать варианты без голосов |
-
-Пример:
-
-```http
-GET /api/v1/admin/polls/{poll_id}/results?include_empty=false
-```
 
 ### Response
 

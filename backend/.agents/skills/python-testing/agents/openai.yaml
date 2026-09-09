@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Backend Testing"
+  short_description: "Write pytest tests with fixtures and database seeds"
+  default_prompt: "Use $python-testing to implement focused backend tests with the project's standard fixtures and seed data."
