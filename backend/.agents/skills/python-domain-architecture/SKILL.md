@@ -11,7 +11,7 @@ description: Design or change a backend domain, choose the correct FastAPI appli
 2. Follow the domain's existing singular file names and `impls/` layout; do not rename historical `service.py` or `router.py` only to normalize it.
 3. Assign each responsibility to one layer before writing code.
 4. Define or update the abstract contract before its implementation when the behavior is injected through `ServiceFactory`.
-5. Wire new implementations into the existing resolver or builder path under `src/settings/di/`.
+5. Wire new implementations through `ServiceFactory` under `src/settings/di/`: the factory receives `DBM`, builds the repository with `self._dbm.session`, and injects it into the service implementation. Expose the factory through `get_factory(dbm: DBM = Depends(get_sql_dbm))`.
 6. Check that no new dependency points from a lower layer to a higher layer.
 7. Validate the smallest complete vertical slice, including its callers and tests.
 

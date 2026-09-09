@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.health.routers import router as health_router
+from apps.pool.routers import router as pool_router
 
 from config import settings
 
@@ -18,9 +19,11 @@ app.add_middleware(
     allow_methods=["OPTIONS", "POST", "GET", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+
 app.include_router(health_router)
 
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(pool_router)
 
 app.include_router(api_router)

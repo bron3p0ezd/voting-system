@@ -42,6 +42,6 @@ description: Create, change, or review backend Service and DbService contracts, 
 
 ## Validation
 
-- Verify contract and implementation signatures and DI construction together.
+- Verify contract and implementation signatures and DI construction together: `ServiceFactory` must pass the repository contract into the service implementation, using a repository built from the active `DBM` session.
 - Test success, domain failure, and rollback behavior for state-changing scenarios.
 - Check that no caller now observes a lower-level infrastructure exception unintentionally.

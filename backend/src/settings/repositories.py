@@ -13,7 +13,6 @@ class Repository(ABC):
 
 class ORMRepository(Repository, Generic[MODEL_TYPE]):
     cls_model: Optional[Type[MODEL_TYPE]] = None
-    cls_schema: Optional[Type[BaseModel]] = None
 
     @abstractmethod
     def __init__(self, **kwargs) -> None: ...

@@ -10,7 +10,7 @@ description: Create, change, or review FastAPI routers in backend `routers.py` o
 1. Inspect the domain's router, URL constants, schemas, service contract, authentication dependencies, and API tests.
 2. Preserve the existing `APIRouter` grouping and `fastapi-versioning` convention.
 3. Define distinct request and response schemas in `schemas.py`.
-4. Acquire `ServiceFactory` through `Depends(get_factory)` from `settings.di.dependencies`.
+4. Acquire `ServiceFactory` through `Depends(get_factory)` from `settings.di.dependencies`. Call its domain-specific factory method, which returns the abstract service contract; never construct repository or service implementations in the router.
 5. Resolve the abstract service contract, call one use-case method, and return its result.
 6. Add or update focused API contract tests.
 

@@ -7,7 +7,7 @@ class BaseUrls:
 
 @dataclass(frozen=True)
 class AppsUrls():
-    pass
+    get_poll = "get_poll"
 
 
 @dataclass(frozen=True)
