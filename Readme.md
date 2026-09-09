@@ -12,13 +12,6 @@
 - Ограничить повторное голосование на базовом уровне, достаточном для обычного пользователя, без обещания полной защиты от обхода.
 - Администратору создавать опросы и просматривать обезличенные результаты.
 
-Текущий backend реализует получение публичного опроса, учёт голоса через
-`POST /api/v1/polls/{poll_id}/votes`, создание опроса через
-`POST /api/v1/admin/polls` и получение списка опросов через
-`GET /api/v1/admin/polls`, а также агрегированные результаты через
-`GET /api/v1/admin/polls/{poll_id}/results`. Голос и опрос сохраняются синхронно: `201 Created`
-возвращается только после commit транзакции.
-
 ## Структура
 
 ```text
@@ -29,7 +22,88 @@ voting-system/
 └── frontend/       # Опциональный пользовательский интерфейс
 ```
 
-# Voting System API
+## Туториал: запуск через Docker Compose
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+| Назначение | Адрес |
+|---|---|
+| Интерфейс | `http://127.0.0.1/` |
+| Администрирование | `http://127.0.0.1/admin/polls` |
+| API через nginx | `http://127.0.0.1/api/v1` |
+| Health check | `http://127.0.0.1/api/health` |
+| OpenAPI | `http://127.0.0.1/docs` |
+
+## Туториал: ручной запуск
+
+Для разработки без контейнеров нужны Python 3.13, PostgreSQL и Node.js 22 или
+новее. Откройте два PowerShell-окна: одно для backend, другое для frontend.
+
+### 1. Подготовьте PostgreSQL и backend
+
+Создайте пустую базу PostgreSQL и пользователя с правами на неё. Затем создайте
+`backend/src/envs/.env` в UTF-8 без BOM. Этот файл содержит локальные секреты и
+не должен попадать в Git. Все перечисленные параметры обязательны:
+
+```dotenv
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=voting
+DB_PASS=replace-with-local-password
+DB_NAME=voting
+ADMIN_JWT_SECRET=replace-with-random-local-secret
+PARTICIPANT_JWT_SECRET=replace-with-random-local-secret
+JWT_ALG=HS256
+TEST_DB_HOST=127.0.0.1
+TEST_DB_PORT=5432
+TEST_DB_USER=voting
+TEST_DB_PASS=replace-with-local-password
+TEST_DB_NAME=voting_test
+TEST_ADMIN_JWT_SECRET=replace-with-random-local-test-secret
+TEST_PARTICIPANT_JWT_SECRET=replace-with-random-local-test-secret
+TEST_JWT_ALG=HS256
+ALLOW_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
+DOCS_URL_ENABLED=/docs
+REDOC_URL_ENABLED=/redoc
+OPENAPI_URL_ENABLED=/openapi.json
+```
+
+Из каталога `backend` установите зависимости, примените миграции и запустите
+сервер:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m alembic upgrade head
+Set-Location src
+..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Проверьте запуск запросом к `http://127.0.0.1:8000/api/health`. При включённых
+в файле окружения настройках OpenAPI доступна по `http://127.0.0.1:8000/docs`.
+
+### 2. Запустите frontend
+
+Во втором PowerShell-окне выполните:
+
+```powershell
+Set-Location frontend
+npm ci
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+npm run dev
+```
+
+Откройте адрес, который напечатает Vite (по умолчанию
+`http://localhost:5173`). Административная страница находится по пути
+`/admin/polls`; публичная страница опроса — по пути `/poll/<poll_id>/vote`.
+Перед изменением постоянной конфигурации frontend сверяйтесь с
+`frontend/.env.example`; переменные с префиксом `VITE_` не подходят для
+секретов.
+
+## API
 
 Базовый URL: ``` /api/v1 ```
 
@@ -38,14 +112,13 @@ voting-system/
 ## Ошибки
 
 - ``` 400 Bad Request ```  — бизнес-правила запроса нарушены;
-- ``` 401 Unauthorized ```  — нет или невалидна аутентификация/cookie;
-- ``` 403 Forbidden ```  — недостаточно прав;
+- ``` 401 Unauthorized ```  — cookie участника отсутствует или недействительна;
 - ``` 404 Not Found ```  — ресурс не найден;
 - ``` 409 Conflict ```  — повторное голосование;
 - ``` 410 Gone ```  — голосование ещё не началось, завершилось или ресурс больше недоступен;
 - ``` 422 Unprocessable Entity ```  — ошибка структурной валидации запроса от Pydantic.
 
-# Public API
+## Public API
 
 ## Получить опрос
 
@@ -155,21 +228,16 @@ POST /api/v1/polls/{poll_id}/votes
 |---|---|
 | `201` | Голос учтён |
 | `400` | Некорректный выбор вариантов |
-| `401` | Cookie отсутствует или недействительна |
+| `401` | Cookie отсутствует или недействительна; обновите страницу для получения новой cookie |
 | `404` | Опрос не найден |
 | `409` | Участник уже проголосовал |
 | `410` | Голосование ещё не началось или уже завершилось |
 
-# Admin API
+## Admin API
 
-Все административные endpoints требуют аутентификации администратора. На этапе
-текущей реализации это правило временно не применяется к
-`GET /api/v1/admin/polls` и `POST /api/v1/admin/polls`: endpoints доступны без
-аутентификации, пока не будет добавлена авторизация.
-
-При отсутствии или некорректной аутентификации: ```401 Unauthorized ```
-
-При недостаточных правах: ```403 Forbidden ```
+Аутентификация администратора пока не реализована: все административные
+endpoints доступны без неё. Не развёртывайте эту часть API в недоверенной сети,
+пока не будет добавлена защита доступа.
 
 ## Создать опрос
 
@@ -259,8 +327,7 @@ ends_at > starts_at
 |---|---|
 | `201` | Опрос создан |
 | `400` | Ошибка валидации |
-| `401` | Нет аутентификации |
-| `403` | Недостаточно прав |
+| `422` | Ошибка структурной валидации запроса |
 
 ## Получить список опросов
 
