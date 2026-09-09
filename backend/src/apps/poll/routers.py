@@ -70,7 +70,7 @@ async def get_poll(
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "Некорректный выбор вариантов."},
-        status.HTTP_401_UNAUTHORIZED: {"description": "Cookie участника отсутствует или недействительна."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Cookie участника отсутствует или недействительна. Обновите страницу."},
         status.HTTP_404_NOT_FOUND: {"description": "Опрос не найден."},
         status.HTTP_409_CONFLICT: {"description": "Голос уже учтён."},
         status.HTTP_410_GONE: {"description": "Опрос недоступен."},
@@ -91,7 +91,7 @@ async def create_vote(
     except InvalidParticipantTokenException as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Cookie участника отсутствует или недействительна.",
+            detail="Cookie участника отсутствует или недействительна. Обновите страницу.",
         ) from error
 
     try:
@@ -109,7 +109,7 @@ async def create_vote(
     except DuplicateVoteException as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Голос уже учтён.",
+            detail="Ваш голос уже учтён.",
         ) from error
     except PollUnavailableException as error:
         raise HTTPException(

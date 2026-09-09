@@ -5,6 +5,7 @@ from uuid import UUID
 
 from apps.poll.dtos import VoteDTO
 from apps.poll.exceptions import (
+    DuplicateVoteException,
     InvalidVoteException,
     PollNotFoundException,
     PollUnavailableException,
@@ -53,6 +54,9 @@ class VoteServiceImpl(VoteService):
             sha256(str(participant_id).encode()).hexdigest(),
             option_ids,
         )
+        if vote is None:
+            raise DuplicateVoteException
+
         await self.__dbm.commit()
 
         return vote
