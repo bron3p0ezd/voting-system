@@ -31,6 +31,8 @@ services:
       DB_PASS: *database_password
       DB_NAME: *database_name
       ADMIN_JWT_SECRET: local-admin-secret-change-before-production
+      ADMIN_LOGIN: admin
+      ADMIN_PASSWORD: admin
       PARTICIPANT_JWT_SECRET: local-participant-secret-change-before-production
       JWT_ALG: *jwt_algorithm
       TEST_DB_HOST: *database_host
@@ -55,8 +57,8 @@ services:
       args:
         VITE_API_BASE_URL: http://127.0.0.1/api/v1
     volumes:
-      - frontend_dist:/app/dist
-    command: ["sh", "-c", "true"]
+      - frontend_dist:/dist
+    command: ["sh", "-c", "cp -a /frontend-dist/. /dist/"]
 
   nginx:
     image: nginx:1.27-alpine
