@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend React Hooks"
+  short_description: "Implement cancellable async React state workflows"
+  default_prompt: "Use $frontend-react-hooks to implement this asynchronous page workflow safely."

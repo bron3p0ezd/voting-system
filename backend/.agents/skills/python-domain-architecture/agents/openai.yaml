@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Domain Architecture"
+  short_description: "Place backend behavior in the correct domain layer"
+  default_prompt: "Use $python-domain-architecture to design this backend change across the correct domain layers."

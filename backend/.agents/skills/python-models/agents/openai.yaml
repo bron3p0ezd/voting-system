@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python SQLAlchemy Models"
+  short_description: "Maintain typed SQLAlchemy models and relationships"
+  default_prompt: "Use $python-models to implement this SQLAlchemy model change with explicit database semantics."

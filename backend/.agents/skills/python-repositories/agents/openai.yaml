@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Repositories"
+  short_description: "Build typed SQLAlchemy queries and DTO mappings"
+  default_prompt: "Use $python-repositories to implement this repository contract and SQLAlchemy query safely."

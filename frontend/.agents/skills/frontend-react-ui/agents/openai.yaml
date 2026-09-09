@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend React UI"
+  short_description: "Build accessible page and shared React components"
+  default_prompt: "Use $frontend-react-ui to implement this component with the project's current UI conventions."
