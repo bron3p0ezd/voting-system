@@ -1,0 +1,14 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+# Interactive approvals for operations outside the sandbox.
+approval_policy = "on-request"
+
+# Allow writes only inside the active Province-Rate workspace.
+sandbox_mode = "workspace-write"
+
+# Use OpenAI's cached search index by default.
+web_search = "cached"
+
+[sandbox_workspace_write]
+# Keep shell commands offline. Built-in web search is configured separately.
+network_access = false

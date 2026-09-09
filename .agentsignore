@@ -1,0 +1,66 @@
+# Python
+**/__pycache__
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+*$py.class
+**/*.so
+.Python
+
+# Logs
+**/*.log
+**/*.log.*
+*.pot
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+db.sqlite3
+*.db-journal
+
+# Environments
+.env
+.env.*
+**/.env
+**/*.env
+.venv
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Uploads & Media
+src/uploads/**
+media/**
+files/**
+
+# Python packages
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Testing
+.pytest_cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+
+# IDE
+.idea
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
