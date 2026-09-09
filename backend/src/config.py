@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     DB_PASS: str
     DB_NAME: str
 
-    JWT_SECRET_KEY_VAL: str
-    JWT_ALG_VAL: str
+    ADMIN_JWT_SECRET: str
+    PARTICIPANT_JWT_SECRET: str
+    JWT_ALG: str
 
     TEST_DB_HOST: str
     TEST_DB_PORT: int
@@ -28,8 +29,9 @@ class Settings(BaseSettings):
     TEST_DB_PASS: str
     TEST_DB_NAME: str
 
-    TEST_JWT_SECRET_KEY_VAL: str
-    TEST_JWT_ALG_VAL: str
+    TEST_ADMIN_JWT_SECRET: str
+    TEST_PARTICIPANT_JWT_SECRET: str
+    TEST_JWT_ALG: str
 
     DOCS_URL_ENABLED: Optional[str] = None
     REDOC_URL_ENABLED: Optional[str] = None
@@ -40,24 +42,8 @@ class Settings(BaseSettings):
     ]
 
     @property
-    def JWT_SECRET_KEY(self) -> str:
-        return self.JWT_SECRET_KEY_VAL
-
-    @property
-    def JWT_ALG(self) -> str:
-        return self.JWT_ALG_VAL
-
-    @property
     def DATABASE_URL(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASS}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-
-    @property
-    def TEST_JWT_SECRET_KEY(self) -> str:
-        return self.TEST_JWT_SECRET_KEY_VAL
-
-    @property
-    def TEST_JWT_ALG(self) -> str:
-        return self.TEST_JWT_ALG_VAL
 
     @property
     def TEST_DATABASE_URL(self) -> str:

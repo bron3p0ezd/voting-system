@@ -1,10 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 
 from apps.pool.exceptions import PollNotFoundException, PollUnavailableException
 from apps.pool.schemas import PollResponse
-from apps.pool.services import PollService
+from apps.pool.services import ParticipantTokenIssuer, PollService
 from settings.di.dependencies import ServiceFactory, get_factory
 from settings.urls import AppsUrls
 
@@ -24,9 +25,14 @@ router = APIRouter(prefix="/polls", tags=["Опросы"])
 )
 async def get_poll(
     poll_id: UUID,
+    request: Request,
+    response: Response,
     factory: ServiceFactory = Depends(get_factory),
 ):
     service: PollService = factory.get_poll_service()
+    participant_token_issuer: ParticipantTokenIssuer = (
+        factory.get_participant_token_issuer()
+    )
 
     try:
         poll = await service.get_public_poll(poll_id)
@@ -40,5 +46,7 @@ async def get_poll(
             status_code=status.HTTP_410_GONE,
             detail="Опрос недоступен.",
         ) from error
+
+    participant_token_issuer.issue_if_needed(request, response)
 
     return PollResponse.model_validate(poll)

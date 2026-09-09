@@ -75,16 +75,16 @@ GET /api/v1/polls/{poll_id}
 }
 ```
 
-При первом запросе сервер может установить подписанную cookie участника.
+При первом запросе без корректной cookie сервер устанавливает cookie `participant_token`.
+Её значение — подписанный JWT с payload вида:
 
-Cookie:
-
-```text
-HttpOnly
-Secure
+```json
+{
+  "sub": "7cc7444e-9809-4bc4-bc04-6ca1f7522e77"
+}
 ```
 
-`Secure` используется при работе через HTTPS.
+`sub` — случайный UUID технического участника, а не идентификатор пользователя.
 
 ### Status codes
 
@@ -99,8 +99,7 @@ Secure
 ```http
 POST /api/v1/polls/{poll_id}/votes
 ```
-
-Для запроса требуется ранее установленная cookie участника.
+Для запроса требуется ранее установленная cookie `participant_token`.
 
 ### Path parameters
 
@@ -126,9 +125,9 @@ POST /api/v1/polls/{poll_id}/votes
 
 `option_ids` должны быть уникальными. Все варианты должны принадлежать указанному опросу.
 
-Для `single`: ```text option_ids.length = 1 ```
+Для `single`: ```option_ids.length = 1```
 
-Для `multiple`:  ```text min_selections <= option_ids.length <= max_selections ```
+Для `multiple`:  ```min_selections <= option_ids.length <= max_selections```
 
 ### Response
 

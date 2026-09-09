@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from apps.pool.dtos import PollDTO, PollOptionDTO
 from apps.pool.models import Poll
 from apps.pool.repositories import PollRepository
-from backend.src.settings.alchemy_repositories import AlchemyRepository
+from settings.alchemy_repositories import AlchemyRepository
 
 
 class PollRepositoryImpl(PollRepository, AlchemyRepository[Poll]):
