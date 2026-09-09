@@ -15,34 +15,72 @@
 - Локальная конфигурация читается из `src/envs/.env`.
 - Не выводи в терминал, ответы или логи значения секретов из env-файлов.
 
+### Текущее состояние реализации
+
+В backend подготовлена базовая конфигурация FastAPI, описаны SQLAlchemy-модели
+опросов и начальная Alembic-миграция для их создания. HTTP endpoints из корневого
+контракта, сервисы и репозитории пока не реализованы.
+
+Модель данных состоит из следующих таблиц:
+
+| Таблица | Назначение |
+|---|---|
+| `polls` | Вопрос, тип выбора, допустимое число вариантов и период голосования |
+| `poll_options` | Упорядоченные варианты ответа конкретного опроса |
+| `votes` | Устойчиво учтённый факт участия с хешем технического ключа участника |
+| `vote_selections` | Выбранные участником варианты; составной ключ запрещает повтор варианта |
+
+Уникальность пары `poll_id` и `participant_key_hash` обеспечивает конкурентно
+безопасную базовую дедупликацию на уровне базы данных. Это не строгая
+идентификация человека: ограничение можно обойти очисткой cookie, сменой браузера
+или устройства. IP-адрес в модели не используется.
+
+Ограничения одной строки (временной интервал, диапазон числа выборов и правила
+типа `single`) заданы в схеме базы данных. Сервис дополнительно проверяет минимум
+два варианта, условие `max_selections <= options.length`, принадлежность вариантов
+опросу и количество выбранных вариантов в одной транзакции.
+
 ## Запуск проекта
 
 ### Первичная подготовка в PowerShell
 
-Выполняй команды из корня `backend-province-rate` в указанном порядке:
+Выполняй команды из корня `backend` в указанном порядке:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m pip install -r requirements.txt
 Set-Location src
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Перед запуском заполни `src/envs/.env.dev`. Обязательные параметры без безопасных значений по умолчанию определены в `src/config.py`. Не копируй секреты в `AGENTS.md`, skills или исходный код.
+Перед запуском заполни `src/envs/.env`. Обязательные параметры без безопасных значений по умолчанию определены в `src/config.py`. Не копируй секреты в `AGENTS.md`, skills или исходный код.
 
 ### Повторный локальный запуск
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 Set-Location src
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 - Локальный адрес: `http://127.0.0.1:8000/`.
 - Health check: `http://127.0.0.1:8000/api/health`.
 - OpenAPI endpoints зависят от `DOCS_URL_ENABLED`, `REDOC_URL_ENABLED` и `OPENAPI_URL_ENABLED`.
 - Docker-сценарий также слушает порт `8000`; параметры production-запуска определены в `Dockerfile`.
+
+Перед первым запуском приложения из каталога `backend` примени миграции:
+
+```powershell
+.\.venv\Scripts\python -m alembic upgrade head
+```
+
+Текущий слой моделей можно проверить без базы данных из каталога `backend\src`:
+
+```powershell
+..\.venv\Scripts\python -c "import migration_tables; from sqlalchemy.orm import configure_mappers; configure_mappers()"
+```
+
+Прикладные тесты пока не добавлены.
 
 ## Рабочий процесс
 
