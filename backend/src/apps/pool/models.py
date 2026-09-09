@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from uuid import UUID, uuid4
 
@@ -132,7 +132,7 @@ class Vote(Base):
     counted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(),
+        default=lambda: datetime.now(tz=timezone.utc),
     )
 
     selections: Mapped[list[VoteSelection]] = relationship(

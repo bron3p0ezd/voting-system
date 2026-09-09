@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from apps.pool.dtos import PollDTO
@@ -16,7 +16,7 @@ class PollServiceImpl(PollService):
         if poll is None:
             raise PollNotFoundException
 
-        now = datetime.now(UTC)
+        now = datetime.now(tz=timezone.utc)
         if not poll.starts_at <= now < poll.ends_at:
             raise PollUnavailableException
 
