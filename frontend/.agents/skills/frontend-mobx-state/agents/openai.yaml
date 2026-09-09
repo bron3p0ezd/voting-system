@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend MobX State"
+  short_description: "Maintain MobX stores and subscriber hook bridges"
+  default_prompt: "Use $frontend-mobx-state to extend the existing global state and React subscriber pattern."

@@ -8,6 +8,9 @@ class BaseUrls:
 @dataclass(frozen=True)
 class AppsUrls():
     get_poll = "get_poll"
+    get_admin_polls = "get_admin_polls"
+    create_admin_poll = "create_admin_poll"
+    create_vote = "create_vote"
 
 
 @dataclass(frozen=True)

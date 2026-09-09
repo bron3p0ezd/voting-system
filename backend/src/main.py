@@ -1,8 +1,9 @@
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from apps.admin_poll.routers import router as admin_poll_router
 from apps.health.routers import router as health_router
-from apps.pool.routers import router as pool_router
+from apps.poll.routers import router as poll_router
 
 from config import settings
 
@@ -24,6 +25,7 @@ app.include_router(health_router)
 
 
 api_router = APIRouter(prefix="/api/v1")
-api_router.include_router(pool_router)
+api_router.include_router(admin_poll_router)
+api_router.include_router(poll_router)
 
 app.include_router(api_router)

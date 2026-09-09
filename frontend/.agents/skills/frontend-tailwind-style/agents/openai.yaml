@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Tailwind Style"
+  short_description: "Extend Tailwind tokens and responsive UI styling"
+  default_prompt: "Use $frontend-tailwind-style to style this UI with the existing design tokens and responsive patterns."
