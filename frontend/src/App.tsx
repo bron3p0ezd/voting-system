@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { createPoll, getPollResults, getPolls } from './api/adminPolls'
+import { getPublicPoll, submitVote } from './api/publicPolls'
 import type { CreatePollPayload, Poll, PollResults, SelectionType } from './types/poll'
 
 interface ModalProps {
@@ -71,19 +72,21 @@ function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
   const now = new Date()
   const [question, setQuestion] = useState('')
   const [selectionType, setSelectionType] = useState<SelectionType>('single')
-  const [minSelections, setMinSelections] = useState(1)
-  const [maxSelections, setMaxSelections] = useState(1)
+  const [minSelections, setMinSelections] = useState('1')
+  const [maxSelections, setMaxSelections] = useState('1')
   const [startsAt, setStartsAt] = useState(toDateTimeLocal(now))
   const [endsAt, setEndsAt] = useState(toDateTimeLocal(new Date(now.getTime() + 60 * 60_000)))
   const [options, setOptions] = useState(['', ''])
   const [error, setError] = useState<string | null>(null)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const changeSelectionType = (value: SelectionType) => {
     setSelectionType(value)
+    setSelectionError(null)
     if (value === 'single') {
-      setMinSelections(1)
-      setMaxSelections(1)
+      setMinSelections('1')
+      setMaxSelections('1')
     }
   }
 
@@ -100,10 +103,13 @@ function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+    setSelectionError(null)
 
     const normalizedOptions = options.map((option) => option.trim())
     const start = new Date(startsAt)
     const end = new Date(endsAt)
+    const minimum = Number(minSelections)
+    const maximum = Number(maxSelections)
 
     if (!question.trim()) {
       setError('Введите вопрос.')
@@ -117,19 +123,26 @@ function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
       setError('Время окончания должно быть позже времени начала.')
       return
     }
-    if (
-      selectionType === 'multiple' &&
-      (minSelections < 1 || maxSelections < minSelections || maxSelections > normalizedOptions.length)
-    ) {
-      setError('Проверьте минимальное и максимальное количество вариантов.')
-      return
+    if (selectionType === 'multiple') {
+      if (!Number.isInteger(minimum) || minimum < 1) {
+        setSelectionError('Минимум должен быть не меньше 1.')
+        return
+      }
+      if (!Number.isInteger(maximum) || maximum < minimum) {
+        setSelectionError('Максимум не может быть меньше минимума.')
+        return
+      }
+      if (maximum > normalizedOptions.length) {
+        setSelectionError(`Максимум не может превышать число вариантов (${normalizedOptions.length}).`)
+        return
+      }
     }
 
     const payload: CreatePollPayload = {
       question: question.trim(),
       selection_type: selectionType,
-      min_selections: selectionType === 'single' ? 1 : minSelections,
-      max_selections: selectionType === 'single' ? 1 : maxSelections,
+      min_selections: selectionType === 'single' ? 1 : minimum,
+      max_selections: selectionType === 'single' ? 1 : maximum,
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       options: normalizedOptions,
@@ -174,28 +187,39 @@ function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
         </label>
 
         {selectionType === 'multiple' && (
-          <div className="grid grid-cols-2 gap-3">
-            <label>
-              <span className="mb-1 block text-sm font-medium">Минимум</span>
-              <input
-                className="w-full rounded border border-neutral-400 px-3 py-2"
-                min="1"
-                onChange={(event) => setMinSelections(Number(event.target.value))}
-                type="number"
-                value={minSelections}
-              />
-            </label>
-            <label>
-              <span className="mb-1 block text-sm font-medium">Максимум</span>
-              <input
-                className="w-full rounded border border-neutral-400 px-3 py-2"
-                min="1"
-                onChange={(event) => setMaxSelections(Number(event.target.value))}
-                type="number"
-                value={maxSelections}
-              />
-            </label>
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <label>
+                <span className="mb-1 block text-sm font-medium">Минимум</span>
+                <input
+                  className="number-field w-full rounded border border-neutral-400 px-3 py-2"
+                  min="1"
+                  onChange={(event) => {
+                    setMinSelections(event.target.value)
+                    setSelectionError(null)
+                  }}
+                  type="number"
+                  step="1"
+                  value={minSelections}
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-sm font-medium">Максимум</span>
+                <input
+                  className="number-field w-full rounded border border-neutral-400 px-3 py-2"
+                  min="1"
+                  onChange={(event) => {
+                    setMaxSelections(event.target.value)
+                    setSelectionError(null)
+                  }}
+                  type="number"
+                  step="1"
+                  value={maxSelections}
+                />
+              </label>
+            </div>
+            {selectionError && <p className="mt-2 text-sm text-red-700">{selectionError}</p>}
+          </>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -305,6 +329,177 @@ function ResultsModal({ error, isLoading, onClose, poll, results }: ResultsModal
   )
 }
 
+interface PollVotePageProps {
+  pollId: string
+}
+
+function PollVotePage({ pollId }: PollVotePageProps) {
+  const [poll, setPoll] = useState<Poll | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([])
+  const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isComplete, setIsComplete] = useState(false)
+
+  useEffect(() => {
+    let isCurrent = true
+
+    const loadPoll = async () => {
+      setIsLoading(true)
+      setLoadError(null)
+      try {
+        const publicPoll = await getPublicPoll(pollId)
+        if (isCurrent) setPoll(publicPoll)
+      } catch (error) {
+        if (isCurrent) {
+          setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить опрос.')
+        }
+      } finally {
+        if (isCurrent) setIsLoading(false)
+      }
+    }
+
+    void loadPoll()
+    return () => {
+      isCurrent = false
+    }
+  }, [pollId])
+
+  const selectOption = (optionId: string) => {
+    if (!poll) return
+
+    setSelectionError(null)
+    setSubmitError(null)
+    if (poll.selection_type === 'single') {
+      setSelectedOptionIds([optionId])
+      return
+    }
+
+    setSelectedOptionIds((current) => {
+      if (current.includes(optionId)) return current.filter((id) => id !== optionId)
+      if (current.length >= poll.max_selections) {
+        setSelectionError(`Можно выбрать не более ${poll.max_selections} вариантов.`)
+        return current
+      }
+      return [...current, optionId]
+    })
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!poll) return
+
+    setSelectionError(null)
+    setSubmitError(null)
+    if (poll.selection_type === 'single' && selectedOptionIds.length !== 1) {
+      setSelectionError('Выберите один вариант ответа.')
+      return
+    }
+    if (
+      poll.selection_type === 'multiple' &&
+      (selectedOptionIds.length < poll.min_selections || selectedOptionIds.length > poll.max_selections)
+    ) {
+      setSelectionError(
+        `Выберите от ${poll.min_selections} до ${poll.max_selections} вариантов ответа.`,
+      )
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await submitVote(poll.id, selectedOptionIds)
+      setIsComplete(true)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось учесть голос.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoading) {
+    return <main className="grid min-h-screen place-items-center p-6 text-neutral-500">Загрузка опроса…</main>
+  }
+
+  if (loadError || !poll) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-white p-6 text-center text-black">
+        <section className="max-w-md border border-red-300 bg-red-50 p-6">
+          <h1 className="text-xl font-semibold">Опрос недоступен</h1>
+          <p className="mt-2 text-red-800">{loadError || 'Опрос не найден.'}</p>
+        </section>
+      </main>
+    )
+  }
+
+  if (isComplete) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-white p-6 text-center text-black">
+        <section className="max-w-md border-2 border-black p-8">
+          <p className="text-4xl" aria-hidden="true">✓</p>
+          <h1 className="mt-4 text-2xl font-bold">Спасибо за голос!</h1>
+          <p className="mt-2 text-neutral-600">Ваш ответ успешно учтён.</p>
+        </section>
+      </main>
+    )
+  }
+
+  const isMultiple = poll.selection_type === 'multiple'
+  const selectionHint = isMultiple
+    ? `Выберите от ${poll.min_selections} до ${poll.max_selections} вариантов.`
+    : 'Выберите один вариант.'
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-white p-4 text-black sm:p-8">
+      <section className="w-full max-w-xl border-2 border-black p-6 sm:p-8">
+        <p className="text-sm uppercase tracking-widest text-neutral-500">Голосование</p>
+        <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{poll.question}</h1>
+        <p className="mt-3 text-sm text-neutral-600">{selectionHint}</p>
+
+        <form className="mt-6 space-y-3" onSubmit={submit}>
+          <fieldset>
+            <legend className="sr-only">Варианты ответа</legend>
+            <div className="space-y-2">
+              {poll.options.map((option) => {
+                const isSelected = selectedOptionIds.includes(option.id)
+
+                return (
+                  <label
+                    className={`flex cursor-pointer items-center gap-3 border p-4 transition-colors ${
+                      isSelected ? 'border-black bg-neutral-100' : 'border-neutral-300 hover:border-black'
+                    }`}
+                    key={option.id}
+                  >
+                    <input
+                      checked={isSelected}
+                      name="vote-option"
+                      onChange={() => selectOption(option.id)}
+                      type={isMultiple ? 'checkbox' : 'radio'}
+                    />
+                    <span>{option.text}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
+          {selectionError && <p className="text-sm text-red-700">{selectionError}</p>}
+          {submitError && <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
+
+          <button
+            className="mt-3 w-full rounded bg-black px-5 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? 'Отправка…' : 'Отправить голос'}
+          </button>
+        </form>
+      </section>
+    </main>
+  )
+}
+
 function AdminPollsPage() {
   const [polls, setPolls] = useState<Poll[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -315,6 +510,7 @@ function AdminPollsPage() {
   const [resultsError, setResultsError] = useState<string | null>(null)
   const [areResultsLoading, setAreResultsLoading] = useState(false)
   const [currentTime, setCurrentTime] = useState(Date.now())
+  const [copiedPollId, setCopiedPollId] = useState<string | null>(null)
   const resultsRequestId = useRef(0)
 
   const loadPolls = async () => {
@@ -359,6 +555,16 @@ function AdminPollsPage() {
     setSelectedPoll(null)
   }
 
+  const copyPollId = async (pollId: string) => {
+    try {
+      await navigator.clipboard.writeText(pollId)
+      setCopiedPollId(pollId)
+      window.setTimeout(() => setCopiedPollId(null), 2_000)
+    } catch {
+      setCopiedPollId(null)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white px-4 py-8 text-black sm:px-8">
       <div className="mx-auto max-w-5xl">
@@ -398,26 +604,44 @@ function AdminPollsPage() {
 
               return (
                 <li key={poll.id}>
-                  <button
-                    className="grid w-full gap-3 px-2 py-5 text-left hover:bg-neutral-50 sm:grid-cols-[1fr_auto] sm:items-center"
-                    onClick={() => void openResults(poll)}
-                    type="button"
-                  >
-                    <span>
+                  <div className="grid gap-3 px-2 py-5 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <button
+                      className="min-w-0 text-left hover:underline hover:underline-offset-4"
+                      onClick={() => void openResults(poll)}
+                      type="button"
+                    >
                       <span className="block text-lg font-medium">{poll.question}</span>
                       <span className="mt-1 block text-sm text-neutral-500">
-                        {formatDate(poll.starts_at)} — {formatDate(poll.ends_at)} · вариантов: {poll.options.length}
+                        {formatDate(poll.starts_at)} — {formatDate(poll.ends_at)}
                       </span>
-                    </span>
-                    <span
-                      className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
-                        isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-green-600' : 'bg-red-600'}`} />
-                      {isActive ? 'Активный' : 'Закончен'}
-                    </span>
-                  </button>
+                      <span className="mt-2 block text-sm text-neutral-700">
+                        Варианты: {poll.options.map((option) => option.text).join(' · ')}
+                      </span>
+                    </button>
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <span
+                        className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
+                          isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-green-600' : 'bg-red-600'}`} />
+                        {isActive ? 'Активный' : 'Закончен'}
+                      </span>
+                      <div className="flex max-w-full items-center gap-2 text-xs">
+                        <code className="break-all bg-neutral-100 px-2 py-1" title={poll.id}>
+                          {poll.id}
+                        </code>
+                        <button
+                          aria-label="Скопировать UUID опроса"
+                          className="shrink-0 rounded border border-neutral-400 px-2 py-1 hover:border-black"
+                          onClick={() => void copyPollId(poll.id)}
+                          type="button"
+                        >
+                          {copiedPollId === poll.id ? 'Скопировано' : 'Копировать'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </li>
               )
             })}
@@ -446,9 +670,14 @@ function AdminPollsPage() {
 
 export function App() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  const voteRoute = path.match(/^\/poll\/([^/]+)\/vote$/)
 
   if (path === '/admin/polls') {
     return <AdminPollsPage />
+  }
+
+  if (voteRoute) {
+    return <PollVotePage pollId={voteRoute[1]} />
   }
 
   if (path === '/') {

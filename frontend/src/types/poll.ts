@@ -39,3 +39,8 @@ export interface PollResults {
   total_participants: number
   results: PollResultItem[]
 }
+
+export interface VoteConfirmation {
+  poll_id: string
+  counted_at: string
+}

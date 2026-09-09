@@ -8,4 +8,15 @@
   body {
     margin: 0;
   }
+
+  .number-field {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .number-field::-webkit-inner-spin-button,
+  .number-field::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
 }
