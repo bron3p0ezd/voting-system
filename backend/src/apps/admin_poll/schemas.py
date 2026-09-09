@@ -39,6 +39,8 @@ class AdminPollResponse(BaseModel):
 
 
 class AdminPollResultItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     option_id: UUID
     text: str
     votes: int
