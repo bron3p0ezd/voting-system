@@ -42,11 +42,7 @@ class AdminPollServiceImpl(AdminPollService):
     async def get_polls(self) -> list[AdminPollDTO]:
         return await self.__repository.get_all()
 
-    async def get_poll_results(
-        self,
-        poll_id: UUID,
-        include_empty: bool,
-    ) -> AdminPollResultsDTO:
+    async def get_poll_results(self, poll_id: UUID) -> AdminPollResultsDTO:
         poll = await self.__repository.get_by_id(poll_id)
         if poll is None:
             raise AdminPollNotFoundException
@@ -58,8 +54,6 @@ class AdminPollServiceImpl(AdminPollService):
         results: list[AdminPollResultItemDTO] = []
         for option in poll.options:
             votes = votes_by_option_id.get(option.id, 0)
-            if not include_empty and votes == 0:
-                continue
             results.append(
                 AdminPollResultItemDTO(
                     option_id=option.id,

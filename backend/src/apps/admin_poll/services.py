@@ -18,8 +18,4 @@ class AdminPollService(Service):
     async def get_polls(self) -> list[AdminPollDTO]: ...
 
     @abstractmethod
-    async def get_poll_results(
-        self,
-        poll_id: UUID,
-        include_empty: bool,
-    ) -> AdminPollResultsDTO: ...
+    async def get_poll_results(self, poll_id: UUID) -> AdminPollResultsDTO: ...

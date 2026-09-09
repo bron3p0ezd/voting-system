@@ -81,12 +81,11 @@ async def get_polls(
 )
 async def get_poll_results(
     poll_id: UUID,
-    include_empty: bool = True,
     factory: ServiceFactory = Depends(get_factory),
 ):
     service: AdminPollService = factory.get_admin_poll_service()
     try:
-        results = await service.get_poll_results(poll_id, include_empty)
+        results = await service.get_poll_results(poll_id)
     except AdminPollNotFoundException as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
