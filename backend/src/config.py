@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     DB_PASS: str
     DB_NAME: str
 
+    ADMIN_LOGIN: str
+    ADMIN_PASSWORD: str
+
     ADMIN_JWT_SECRET: str
     PARTICIPANT_JWT_SECRET: str
     JWT_ALG: str

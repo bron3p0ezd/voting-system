@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { createPoll, getPollResults, getPolls } from './api/adminPolls'
+import { loginAdmin } from './api/adminAuth'
+import { clearAdminToken, hasAdminToken } from './api/adminSession'
+import { HttpError } from './api/http'
 import { getPublicPoll, submitVote } from './api/publicPolls'
 import type { CreatePollPayload, Poll, PollResults, SelectionType } from './types/poll'
 
@@ -66,9 +69,10 @@ function formatDate(value: string): string {
 interface CreatePollModalProps {
   onClose: () => void
   onCreated: (poll: Poll) => void
+  onUnauthorized: () => void
 }
 
-function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
+function CreatePollModal({ onClose, onCreated, onUnauthorized }: CreatePollModalProps) {
   const now = new Date()
   const [question, setQuestion] = useState('')
   const [selectionType, setSelectionType] = useState<SelectionType>('single')
@@ -154,6 +158,10 @@ function CreatePollModal({ onClose, onCreated }: CreatePollModalProps) {
       onCreated(poll)
       onClose()
     } catch (requestError) {
+      if (requestError instanceof HttpError && requestError.status === 401) {
+        onUnauthorized()
+        return
+      }
       setError(requestError instanceof Error ? requestError.message : 'Не удалось создать опрос.')
     } finally {
       setIsSubmitting(false)
@@ -500,7 +508,80 @@ function PollVotePage({ pollId }: PollVotePageProps) {
   )
 }
 
-function AdminPollsPage() {
+interface AdminLoginPageProps {
+  onAuthenticated: () => void
+}
+
+function AdminLoginPage({ onAuthenticated }: AdminLoginPageProps) {
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      await loginAdmin(login, password)
+      onAuthenticated()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось выполнить вход.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-white p-6 text-black">
+      <section className="w-full max-w-md border-2 border-black p-6 sm:p-8">
+        <p className="text-sm uppercase tracking-widest text-neutral-500">Voting System</p>
+        <h1 className="mt-2 text-3xl font-bold">Вход администратора</h1>
+        <p className="mt-2 text-sm text-neutral-600">Войдите, чтобы управлять опросами и видеть результаты.</p>
+        <form className="mt-6 space-y-4" onSubmit={(event) => void submit(event)}>
+          <label className="block" htmlFor="admin-login">
+            <span className="mb-1 block text-sm font-medium">Логин</span>
+            <input
+              autoComplete="username"
+              autoFocus
+              className="w-full rounded border border-neutral-400 px-3 py-2 outline-none focus:border-black"
+              id="admin-login"
+              onChange={(event) => setLogin(event.target.value)}
+              required
+              value={login}
+            />
+          </label>
+          <label className="block" htmlFor="admin-password">
+            <span className="mb-1 block text-sm font-medium">Пароль</span>
+            <input
+              autoComplete="current-password"
+              className="w-full rounded border border-neutral-400 px-3 py-2 outline-none focus:border-black"
+              id="admin-password"
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+          {error && <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+          <button
+            className="w-full rounded bg-black px-5 py-3 font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? 'Вход…' : 'Войти'}
+          </button>
+        </form>
+      </section>
+    </main>
+  )
+}
+
+interface AdminPollsPageProps {
+  onUnauthorized: () => void
+}
+
+function AdminPollsPage({ onUnauthorized }: AdminPollsPageProps) {
   const [polls, setPolls] = useState<Poll[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -519,6 +600,10 @@ function AdminPollsPage() {
     try {
       setPolls(await getPolls())
     } catch (error) {
+      if (error instanceof HttpError && error.status === 401) {
+        onUnauthorized()
+        return
+      }
       setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить опросы.')
     } finally {
       setIsLoading(false)
@@ -542,6 +627,10 @@ function AdminPollsPage() {
       const pollResults = await getPollResults(poll.id)
       if (resultsRequestId.current === requestId) setResults(pollResults)
     } catch (error) {
+      if (error instanceof HttpError && error.status === 401) {
+        onUnauthorized()
+        return
+      }
       if (resultsRequestId.current === requestId) {
         setResultsError(error instanceof Error ? error.message : 'Не удалось загрузить статистику.')
       }
@@ -573,13 +662,22 @@ function AdminPollsPage() {
             <p className="text-sm uppercase tracking-widest text-neutral-500">Панель администратора</p>
             <h1 className="mt-1 text-3xl font-bold">Опросы</h1>
           </div>
-          <button
-            className="rounded bg-black px-5 py-2.5 font-medium text-white hover:bg-neutral-800"
-            onClick={() => setIsCreateOpen(true)}
-            type="button"
-          >
-            Создать опрос
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded bg-black px-5 py-2.5 font-medium text-white hover:bg-neutral-800"
+              onClick={() => setIsCreateOpen(true)}
+              type="button"
+            >
+              Создать опрос
+            </button>
+            <button
+              className="rounded border border-black px-5 py-2.5 font-medium hover:bg-neutral-100"
+              onClick={onUnauthorized}
+              type="button"
+            >
+              Выйти
+            </button>
+          </div>
         </header>
 
         {isLoading && <p className="py-10 text-center text-neutral-500">Загрузка опросов…</p>}
@@ -653,6 +751,7 @@ function AdminPollsPage() {
         <CreatePollModal
           onClose={() => setIsCreateOpen(false)}
           onCreated={(poll) => setPolls((current) => [poll, ...current])}
+          onUnauthorized={onUnauthorized}
         />
       )}
       {selectedPoll && (
@@ -669,11 +768,20 @@ function AdminPollsPage() {
 }
 
 export function App() {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(hasAdminToken)
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
   const voteRoute = path.match(/^\/poll\/([^/]+)\/vote$/)
 
   if (path === '/admin/polls') {
-    return <AdminPollsPage />
+    const logout = () => {
+      clearAdminToken()
+      setIsAdminAuthenticated(false)
+    }
+    return isAdminAuthenticated ? (
+      <AdminPollsPage onUnauthorized={logout} />
+    ) : (
+      <AdminLoginPage onAuthenticated={() => setIsAdminAuthenticated(true)} />
+    )
   }
 
   if (voteRoute) {

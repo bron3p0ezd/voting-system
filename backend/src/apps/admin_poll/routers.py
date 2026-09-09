@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from apps.auth.dependencies import require_admin
 from apps.admin_poll.dtos import CreateAdminPollDTO
 from apps.admin_poll.exceptions import (
     AdminPollNotFoundException,
@@ -17,7 +18,10 @@ from settings.di.dependencies import ServiceFactory, get_factory
 from settings.urls import AppsUrls
 
 
-router = APIRouter(prefix="/admin/polls", tags=["Список опросов"])
+router = APIRouter(
+    prefix="/admin/polls",
+    tags=["Список опросов"],
+)
 
 
 @router.post(
@@ -27,11 +31,13 @@ router = APIRouter(prefix="/admin/polls", tags=["Список опросов"])
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "Некорректные параметры опроса."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Требуется авторизация администратора."},
     },
 )
 async def create_poll(
     payload: CreateAdminPollRequest,
     factory: ServiceFactory = Depends(get_factory),
+    _admin_token: str = Depends(require_admin),
 ):
     service: AdminPollService = factory.get_admin_poll_service()
     try:
@@ -63,6 +69,7 @@ async def create_poll(
 )
 async def get_polls(
     factory: ServiceFactory = Depends(get_factory),
+    _admin_token: str = Depends(require_admin),
 ):
     service: AdminPollService = factory.get_admin_poll_service()
     polls = await service.get_polls()
@@ -77,11 +84,13 @@ async def get_polls(
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Опрос не найден."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Требуется авторизация администратора."},
     },
 )
 async def get_poll_results(
     poll_id: UUID,
     factory: ServiceFactory = Depends(get_factory),
+    _admin_token: str = Depends(require_admin),
 ):
     service: AdminPollService = factory.get_admin_poll_service()
     try:

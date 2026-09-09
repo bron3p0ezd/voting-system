@@ -65,6 +65,8 @@ DB_USER=voting
 DB_PASS=replace-with-local-password
 DB_NAME=voting
 ADMIN_JWT_SECRET=replace-with-random-local-secret
+ADMIN_LOGIN=admin
+ADMIN_PASSWORD=replace-with-local-admin-password
 PARTICIPANT_JWT_SECRET=replace-with-random-local-secret
 JWT_ALG=HS256
 TEST_DB_HOST=127.0.0.1
@@ -112,6 +114,9 @@ npm run dev
 Перед изменением постоянной конфигурации frontend сверяйтесь с
 `frontend/.env.example`; переменные с префиксом `VITE_` не подходят для
 секретов.
+
+В Docker Compose для локальной демонстрации заданы `ADMIN_LOGIN=admin` и
+`ADMIN_PASSWORD=admin`; замените их перед любым внешним развёртыванием.
 
 ## Public API
 
@@ -230,6 +235,38 @@ POST /api/v1/polls/{poll_id}/votes
 
 ## Admin API
 
+Административные endpoint’ы требуют заголовок `Authorization: Bearer <access_token>`.
+Токен содержит роль `admin`, подписывается отдельным `ADMIN_JWT_SECRET` и действует
+60 минут — это фиксированное правило `AdminTokenPolicy`. Публичные endpoint’ы
+опросов и голосования токен администратора не требуют.
+
+## Войти как администратор
+
+```http
+POST /api/v1/auth/admin/login
+Content-Type: application/json
+```
+
+```json
+{
+  "login": "admin",
+  "password": "string"
+}
+```
+
+При корректных учётных данных из `ADMIN_LOGIN` и `ADMIN_PASSWORD` endpoint вернёт:
+
+```json
+{
+  "access_token": "JWT",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
+```
+
+Неверные учётные данные возвращают `401 Unauthorized`; отсутствие, истечение или
+неверная роль токена при обращении к административным endpoint’ам также возвращают `401`.
+
 ## Создать опрос
 
 ```http
@@ -318,6 +355,7 @@ ends_at > starts_at
 |---|---|
 | `201` | Опрос создан |
 | `400` | Ошибка валидации |
+| `401` | Требуется авторизация администратора |
 | `422` | Ошибка структурной валидации запроса |
 
 ## Получить список опросов
@@ -358,6 +396,7 @@ GET /api/v1/admin/polls
 | Код | Описание |
 |---|---|
 | `200` | Список опросов получен |
+| `401` | Требуется авторизация администратора |
 
 ## Получить результаты
 
@@ -403,3 +442,9 @@ GET /api/v1/admin/polls/{poll_id}/results
 | `participant_percentage` | decimal | Процент участников, выбравших вариант |
 
 Процент вычисляется как: ``` votes / total_participants * 100 ```.
+
+| Код | Описание |
+|---|---|
+| `200` | Результаты получены |
+| `401` | Требуется авторизация администратора |
+| `404` | Опрос не найден |
