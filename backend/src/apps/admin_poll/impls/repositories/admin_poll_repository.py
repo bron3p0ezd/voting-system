@@ -1,7 +1,13 @@
+from uuid import UUID
+
 from sqlalchemy import insert, select
 from sqlalchemy.orm import selectinload
 
-from apps.admin_poll.dtos import AdminPollDTO, AdminPollOptionDTO, CreateAdminPollDTO
+from apps.admin_poll.dtos import (
+    AdminPollDTO,
+    AdminPollOptionDTO,
+    CreateAdminPollDTO,
+)
 from apps.admin_poll.repositories import AdminPollRepository
 from apps.poll.models import Poll, PollOption
 from settings.alchemy_repositories import AlchemyRepository
@@ -76,6 +82,17 @@ class AdminPollRepositoryImpl(AdminPollRepository, AlchemyRepository[Poll]):
         result = await self.session.execute(statement)
 
         return [self.__to_dto(poll) for poll in result.scalars().all()]
+
+    async def get_by_id(self, poll_id: UUID) -> AdminPollDTO | None:
+        statement = (
+            select(self.model)
+            .options(selectinload(self.model.options))
+            .where(self.model.id == poll_id)
+        )
+        result = await self.session.execute(statement)
+        poll = result.scalar_one_or_none()
+
+        return self.__to_dto(poll) if poll is not None else None
 
     def __to_dto(self, poll: Poll) -> AdminPollDTO:
         return AdminPollDTO(

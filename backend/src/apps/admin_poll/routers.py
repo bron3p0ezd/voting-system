@@ -1,8 +1,17 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from apps.admin_poll.dtos import CreateAdminPollDTO
-from apps.admin_poll.exceptions import InvalidAdminPollException
-from apps.admin_poll.schemas import AdminPollResponse, CreateAdminPollRequest
+from apps.admin_poll.exceptions import (
+    AdminPollNotFoundException,
+    InvalidAdminPollException,
+)
+from apps.admin_poll.schemas import (
+    AdminPollResponse,
+    AdminPollResultsResponse,
+    CreateAdminPollRequest,
+)
 from apps.admin_poll.services import AdminPollService
 from settings.di.dependencies import ServiceFactory, get_factory
 from settings.urls import AppsUrls
@@ -59,3 +68,29 @@ async def get_polls(
     polls = await service.get_polls()
 
     return [AdminPollResponse.model_validate(poll) for poll in polls]
+
+
+@router.get(
+    "/{poll_id}/results",
+    name=AppsUrls.get_admin_poll_results,
+    response_model=AdminPollResultsResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Опрос не найден."},
+    },
+)
+async def get_poll_results(
+    poll_id: UUID,
+    include_empty: bool = True,
+    factory: ServiceFactory = Depends(get_factory),
+):
+    service: AdminPollService = factory.get_admin_poll_service()
+    try:
+        results = await service.get_poll_results(poll_id, include_empty)
+    except AdminPollNotFoundException as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Опрос не найден.",
+        ) from error
+
+    return AdminPollResultsResponse.model_validate(results)

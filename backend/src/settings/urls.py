@@ -9,6 +9,7 @@ class BaseUrls:
 class AppsUrls():
     get_poll = "get_poll"
     get_admin_polls = "get_admin_polls"
+    get_admin_poll_results = "get_admin_poll_results"
     create_admin_poll = "create_admin_poll"
     create_vote = "create_vote"
 

@@ -3,6 +3,9 @@ from fastapi import Depends
 from apps.admin_poll.impls.repositories.admin_poll_repository import (
     AdminPollRepositoryImpl,
 )
+from apps.admin_poll.impls.repositories.admin_poll_statistics_repository import (
+    AdminPollStatisticsRepositoryImpl,
+)
 from apps.admin_poll.impls.services.admin_poll_service import AdminPollServiceImpl
 from apps.admin_poll.services import AdminPollService
 from apps.poll.impls.repositories.poll_repository import PollRepositoryImpl
@@ -33,7 +36,8 @@ class ServiceFactory:
 
     def get_admin_poll_service(self) -> AdminPollService:
         repository = AdminPollRepositoryImpl(self.__dbm.session)
-        return AdminPollServiceImpl(repository, self.__dbm)
+        statistics_repository = AdminPollStatisticsRepositoryImpl(self.__dbm.session)
+        return AdminPollServiceImpl(repository, statistics_repository, self.__dbm)
 
     def get_participant_token_issuer(self) -> ParticipantTokenIssuer:
         return ParticipantTokenIssuerImpl(

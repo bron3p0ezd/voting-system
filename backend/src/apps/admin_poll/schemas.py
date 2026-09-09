@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -35,3 +36,18 @@ class AdminPollResponse(BaseModel):
     starts_at: datetime
     ends_at: datetime
     options: list[AdminPollOptionResponse]
+
+
+class AdminPollResultItemResponse(BaseModel):
+    option_id: UUID
+    text: str
+    votes: int
+    participant_percentage: Decimal
+
+
+class AdminPollResultsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    poll_id: UUID
+    total_participants: int
+    results: list[AdminPollResultItemResponse]
