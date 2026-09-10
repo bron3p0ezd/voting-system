@@ -23,4 +23,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD curl -f http://localhost:8000/api/health || exit 1
 
 ENTRYPOINT ["/backend/entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--app-dir", "/backend/src", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--access-log"]
+CMD ["uvicorn", "main:app", "--app-dir", "/backend/src", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--no-access-log"]
