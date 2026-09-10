@@ -43,6 +43,35 @@ Access-log успешных HTTP-запросов отключён в production
 синхронный вывод в stdout не ограничивал пропускную способность при высокой
 нагрузке. Ошибки приложения и сервера продолжают журналироваться.
 
+### Пул соединений и масштабирование API
+
+Пул задаётся переменными `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`,
+`DB_POOL_TIMEOUT_SECONDS` и `DB_POOL_PRE_PING`. Для каждого процесса API его
+максимальный размер равен `DB_POOL_SIZE + DB_MAX_OVERFLOW`. В Compose заданы
+`10 + 5` соединений на worker и два worker на реплику. PostgreSQL ограничен
+`max_connections=100`; для приложения оставлен безопасный бюджет 80 соединений,
+а остальные нужны PostgreSQL и служебным подключениям.
+
+Запустите две реплики API так:
+
+```powershell
+docker compose up --build -d --scale backend=2
+docker compose ps
+```
+
+Это даёт максимум `2 реплики × 2 worker × (10 + 5) = 60` соединений и оставляет
+запас до 80. Nginx динамически разрешает имя сервиса `backend` в Docker DNS и
+распределяет запросы между репликами. Перед увеличением числа реплик, workers или
+размера пула сначала пересчитайте условие:
+
+```text
+реплики × workers × (pool_size + max_overflow) <= безопасный лимит PostgreSQL
+```
+
+Миграции выполняет одноразовый сервис `migrate` до старта API; это исключает
+одновременный запуск Alembic всеми репликами. Настройки — исходная точка для
+нагрузочного теста, а не подтверждённая характеристика производительности.
+
 | Назначение | Адрес |
 |---|---|
 | Интерфейс | `http://127.0.0.1/` |
@@ -69,6 +98,10 @@ DB_PORT=5432
 DB_USER=voting
 DB_PASS=replace-with-local-password
 DB_NAME=voting
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT_SECONDS=30
+DB_POOL_PRE_PING=true
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_DB=0

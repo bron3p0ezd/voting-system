@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -18,6 +19,11 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASS: str
     DB_NAME: str
+
+    DB_POOL_SIZE: int = Field(default=10, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=5, ge=0)
+    DB_POOL_TIMEOUT_SECONDS: float = Field(default=30, gt=0)
+    DB_POOL_PRE_PING: bool = True
 
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379

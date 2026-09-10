@@ -9,6 +9,7 @@ x-local-values:
 services:
   postgres:
     image: postgres:17-alpine
+    command: ["postgres", "-c", "max_connections=100"]
     environment:
       POSTGRES_DB: *database_name
       POSTGRES_USER: *database_user
@@ -39,6 +40,11 @@ services:
       DB_USER: *database_user
       DB_PASS: *database_password
       DB_NAME: *database_name
+      DB_POOL_SIZE: 10
+      DB_MAX_OVERFLOW: 5
+      DB_POOL_TIMEOUT_SECONDS: 30
+      DB_POOL_PRE_PING: "true"
+      UVICORN_WORKERS: 4
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
@@ -61,9 +67,45 @@ services:
       REDOC_URL_ENABLED: /redoc
       OPENAPI_URL_ENABLED: /openapi.json
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DB_HOST: *database_host
+      DB_PORT: *database_port
+      DB_USER: *database_user
+      DB_PASS: *database_password
+      DB_NAME: *database_name
+      DB_POOL_SIZE: 1
+      DB_MAX_OVERFLOW: 0
+      DB_POOL_TIMEOUT_SECONDS: 30
+      DB_POOL_PRE_PING: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      POLL_CACHE_TTL_SECONDS: 60
+      ADMIN_JWT_SECRET: local-admin-secret-change-before-production
+      ADMIN_LOGIN: admin
+      ADMIN_PASSWORD: admin
+      PARTICIPANT_JWT_SECRET: local-participant-secret-change-before-production
+      JWT_ALG: *jwt_algorithm
+      TEST_DB_HOST: *database_host
+      TEST_DB_PORT: *database_port
+      TEST_DB_USER: *database_user
+      TEST_DB_PASS: *database_password
+      TEST_DB_NAME: *database_name
+      TEST_ADMIN_JWT_SECRET: local-test-admin-secret
+      TEST_PARTICIPANT_JWT_SECRET: local-test-participant-secret
+      TEST_JWT_ALG: *jwt_algorithm
+      ALLOW_ORIGINS: '["http://localhost","http://127.0.0.1"]'
+    depends_on:
+      postgres:
         condition: service_healthy
 
   frontend:
