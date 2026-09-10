@@ -26,15 +26,56 @@
 ```text
 voting-system/
 ├── AGENTS.md       # Общие правила работы агентов
-├── README.md       # Описание проекта и задания
+├── Readme.md       # Описание проекта и задания
 ├── backend/        # API, бизнес-логика и хранение данных
 ├── frontend/       # Пользовательский интерфейс голосования и администрирования
 └── web-server/     # Конфигурация nginx для раздачи frontend и проксирования API
 ```
 
+### Backend
+
+Backend расположен в `backend/`. В нём разделены HTTP-контракты, правила
+предметной области и доступ к данным, поэтому router не обращается к PostgreSQL
+или Redis напрямую.
+
+```text
+backend/
+├── Dockerfile                # Образ API: устанавливает зависимости и запускает Uvicorn
+├── alembic.ini               # Настройки Alembic
+├── requirements.in           # Прямые Python-зависимости
+├── requirements.txt          # Зафиксированное дерево зависимостей для установки
+├── load_tests/
+│   └── locustfile.py         # GET- и POST-сценарии нагрузочного измерения
+└── src/
+    ├── main.py               # Создаёт FastAPI, CORS и подключает маршруты
+    ├── config.py             # Читает настройки из envs/.env и переменных окружения
+    ├── apps/                 # Домены приложения
+    │   ├── health/           # Endpoint проверки состояния API
+    │   ├── auth/             # Вход администратора, выпуск и проверка JWT
+    │   ├── poll/             # Публичное получение опроса, cookie участника и учёт голоса
+    │   └── admin_poll/       # Создание, список опросов и обезличенные результаты
+    ├── settings/             # Общая инфраструктура: DI, PostgreSQL, Redis и базовые контракты
+    ├── migrations/           # Alembic-миграции и версии схемы PostgreSQL
+    ├── migration_tables.py   # Импортирует модели для формирования metadata миграций
+    └── tests/                # Unit- и нагрузочные тесты, запускаемые через pytest
+```
+
+Каждый прикладной домен в `src/apps/` организован одинаково: `routers.py` задаёт
+HTTP-endpoint’ы и преобразует доменные ошибки в ответы; `schemas.py` описывает
+входные и выходные JSON-модели; `services.py` и `repositories.py` содержат
+абстрактные контракты. Реализации находятся в `impls/`: сервисы применяют
+бизнес-правила и управляют транзакцией, а репозитории выполняют запросы к базе.
+ORM-модели опросов, вариантов и голосов находятся в `apps/poll/models.py`.
+
+`settings/di/dependencies.py` собирает реализации через `ServiceFactory`, чтобы
+router зависел от контракта, а не от конкретного хранилища. `settings/database.py`
+создаёт асинхронный SQLAlchemy engine и пул соединений; `settings/redis.py` —
+клиент Redis. Публичный опрос кэшируется в Redis, но окончательная запись голоса
+и защита от повторного учёта выполняются атомарно в PostgreSQL.
+
 ## Туториал: запуск через Docker Compose
 
-```powershell
+```bash
 docker compose up --build -d
 docker compose ps
 ```
@@ -44,15 +85,16 @@ docker compose ps
 
 Запустите две реплики API так:
 
-```powershell
+```bash
 docker compose up --build -d --scale backend=2
 docker compose ps
 ```
 
-Это даёт максимум `2 реплики × 2 worker × (10 + 5) = 60` соединений и оставляет
-запас до 80. Nginx динамически разрешает имя сервиса `backend` в Docker DNS и
-распределяет запросы между репликами. Перед увеличением числа реплик, workers или
-размера пула сначала пересчитайте условие:
+Это даёт максимум `2 реплики × 2 worker × (10 + 5) = 60` соединений из лимита
+PostgreSQL в 100, оставляя запас 40 соединений. При старте nginx разрешает имя
+сервиса `backend` через Docker DNS и распределяет запросы между полученными
+адресами реплик. Перед увеличением числа реплик, workers или размера пула сначала
+пересчитайте условие:
 
 ```text
 реплики × workers × (pool_size + max_overflow) <= безопасный лимит PostgreSQL
@@ -67,19 +109,21 @@ docker compose ps
 | Администрирование | `http://127.0.0.1/admin/polls` |
 | API через nginx | `http://127.0.0.1/api/v1` |
 | Health check | `http://127.0.0.1/api/health` |
-| OpenAPI | `http://127.0.0.1/docs` |
+| OpenAPI | недоступна через nginx: текущая конфигурация проксирует только `/api/` |
 
 ## Туториал: ручной запуск
 
-Для разработки без контейнеров нужны Python 3.13, PostgreSQL и Node.js 22 или
-новее. Откройте два PowerShell-окна: одно для backend, другое для frontend.
+Для разработки без контейнеров нужны Python 3.13, PostgreSQL, Redis и Node.js 22 или
+новее. Откройте два терминала: один для backend, другой для frontend.
 
 ### 1. Подготовьте PostgreSQL, Redis и backend
 
 Создайте пустую базу PostgreSQL, пользователя с правами на неё и запустите Redis.
 Затем создайте
 `backend/src/envs/.env` в UTF-8 без BOM. Этот файл содержит локальные секреты и
-не должен попадать в Git. Все перечисленные параметры обязательны:
+не должен попадать в Git. Ниже приведён полный пример локальной конфигурации.
+Параметры пула соединений, Redis, CORS и URL документации можно не указывать:
+для них используются значения по умолчанию из `backend/src/config.py`.
 
 ```dotenv
 DB_HOST=127.0.0.1
@@ -117,12 +161,12 @@ OPENAPI_URL_ENABLED=/openapi.json
 Из каталога `backend` установите зависимости, примените миграции и запустите
 сервер:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m alembic upgrade head
-Set-Location src
-..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```bash
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m alembic upgrade head
+cd src
+../.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Проверьте запуск запросом к `http://127.0.0.1:8000/api/health`. При включённых
@@ -130,13 +174,12 @@ Set-Location src
 
 ### 2. Запустите frontend
 
-Во втором PowerShell-окне выполните:
+Во втором терминале выполните из корня репозитория:
 
-```powershell
-Set-Location frontend
+```bash
+cd frontend
 npm ci
-$env:VITE_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
-npm run dev
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm run dev
 ```
 
 Откройте адрес, который напечатает Vite (по умолчанию
@@ -148,6 +191,11 @@ npm run dev
 
 В Docker Compose для локальной демонстрации заданы `ADMIN_LOGIN=admin` и
 `ADMIN_PASSWORD=admin`; замените их перед любым внешним развёртыванием.
+
+Повторное голосование ограничивается cookie `participant_token`: очистка cookie,
+новый профиль браузера или другое устройство позволяют получить новый технический
+идентификатор и проголосовать снова. IP-адрес не используется как признак
+уникальности, а результаты не содержат технических идентификаторов участников.
 
 
 ## Public API
@@ -276,8 +324,8 @@ POST /api/v1/polls/{poll_id}/votes
 В backend добавлены `pytest`, `pytest-asyncio` и Locust. После установки
 зависимостей запускайте pytest из каталога `backend`:
 
-```powershell
-.\.venv\Scripts\python -m pytest -q
+```bash
+.venv/bin/python -m pytest -q
 ```
 
 ### Раздельное измерение GET и POST
@@ -291,32 +339,25 @@ Locust-теста только при явно заданном целевом �
   `POST /api/v1/polls/{poll_id}/votes`. Уникальные participant JWT создаются
   внутри генератора нагрузки и не требуют подготовительного GET-запроса.
 
-Тесты не содержат минимального требования к RPS, error rate или p95. После
-прогона каждый печатает строку `PERFORMANCE_RESULT` с числом успешных запросов,
-фактической длительностью измерения, успешными RPS, error rate и p95. Техническая
-ошибка Locust или ошибочные HTTP-ответы по-прежнему делают соответствующий тест
-неуспешным.
 
 Перед запуском создайте отдельный активный single-choice опрос и возьмите UUID
 опроса и его варианта. Для POST-only теста передайте генератору тот же тестовый
-секрет participant JWT, который настроен на стенде. Не используйте production-
-секрет. Нагрузочный стенд должен использовать отдельную тестовую PostgreSQL-базу:
-POST-only сценарий создаёт новый устойчиво записанный голос на каждом запросе.
+секрет participant JWT, который настроен на стенде.
 
-```powershell
-Set-Location backend
-$env:VOTING_LOAD_BASE_URL = "http://127.0.0.1"
-$env:VOTING_POLL_ID = "UUID-опроса"
-$env:VOTING_OPTION_ID = "UUID-варианта"
-$env:VOTING_PARTICIPANT_JWT_SECRET = "тестовый-секрет-стенда"
-.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -q
+```bash
+cd backend
+export VOTING_LOAD_BASE_URL="http://127.0.0.1"
+export VOTING_POLL_ID="UUID-опроса"
+export VOTING_OPTION_ID="UUID-варианта"
+export VOTING_PARTICIPANT_JWT_SECRET="local-participant-secret-change-before-production"
+.venv/bin/python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -q
 ```
 
 Можно запустить только одно измерение:
 
-```powershell
-.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k get_poll -q
-.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k create_vote -q
+```bash
+.venv/bin/python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k get_poll -q
+.venv/bin/python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k create_vote -q
 ```
 
 Каждый тест запускает 1 667 одновременных пользователей. Это уровень создаваемой

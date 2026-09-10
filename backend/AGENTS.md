@@ -9,7 +9,7 @@
 
 ## Проект
 
-- Стек: Python 3.13, FastAPI 0.115, SQLAlchemy 2.0 async, Pydantic 2, PostgreSQL/asyncpg, Alembic, pytest и pytest-asyncio.
+- Стек: Python 3.13, FastAPI 0.141.1, SQLAlchemy 2.0 async, Pydantic 2, PostgreSQL/asyncpg, Alembic, pytest и pytest-asyncio.
 - Исходный код находится в `src/`; точка входа — `src/main.py`; конфигурация — `src/config.py`.
 - Домены находятся в `src/apps/`, инфраструктурные контракты и DI — в `src/settings/`.
 - Локальная конфигурация читается из `src/envs/.env`.
@@ -17,9 +17,9 @@
 
 ### Текущее состояние реализации
 
-В backend подготовлена базовая конфигурация FastAPI, описаны SQLAlchemy-модели
-опросов и начальная Alembic-миграция для их создания. HTTP endpoints из корневого
-контракта, сервисы и репозитории пока не реализованы.
+В backend реализованы публичные endpoints для просмотра опроса и учёта голоса,
+административные endpoints для входа, создания и просмотра опросов и результатов,
+а также сервисы, репозитории, Redis-кэш и начальная Alembic-миграция.
 
 Модель данных состоит из следующих таблиц:
 
@@ -42,25 +42,25 @@
 
 ## Запуск проекта
 
-### Первичная подготовка в PowerShell
+### Первичная подготовка в Linux
 
 Выполняй команды из корня `backend` в указанном порядке:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-Set-Location src
-..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```bash
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m alembic upgrade head
+cd src
+../.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Перед запуском заполни `src/envs/.env`. Обязательные параметры без безопасных значений по умолчанию определены в `src/config.py`. Не копируй секреты в `AGENTS.md`, skills или исходный код.
 
 ### Повторный локальный запуск
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-Set-Location src
-..\.venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```bash
+cd src
+../.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 - Локальный адрес: `http://127.0.0.1:8000/`.
@@ -68,19 +68,14 @@ Set-Location src
 - OpenAPI endpoints зависят от `DOCS_URL_ENABLED`, `REDOC_URL_ENABLED` и `OPENAPI_URL_ENABLED`.
 - Docker-сценарий также слушает порт `8000`; параметры production-запуска определены в `Dockerfile`.
 
-Перед первым запуском приложения из каталога `backend` примени миграции:
+Текущий слой моделей можно проверить без базы данных из каталога `backend/src`:
 
-```powershell
-.\.venv\Scripts\python -m alembic upgrade head
+```bash
+../.venv/bin/python -c "import migration_tables; from sqlalchemy.orm import configure_mappers; configure_mappers()"
 ```
 
-Текущий слой моделей можно проверить без базы данных из каталога `backend\src`:
-
-```powershell
-..\.venv\Scripts\python -c "import migration_tables; from sqlalchemy.orm import configure_mappers; configure_mappers()"
-```
-
-Прикладные тесты пока не добавлены.
+Доступны unit-тесты сервисов, репозиториев и Redis-кэша, а также нагрузочные
+сценарии Locust, запускаемые через pytest с маркером `performance`.
 
 ## Рабочий процесс
 
@@ -136,7 +131,7 @@ Set-Location src
 ## Тестирование
 
 - Для `src/tests/**` соблюдай вложенный `src/tests/AGENTS.md`.
-- Запускай минимальный релевантный набор тестов из корня репозитория через `.venv`, например `.\.venv\Scripts\python -m pytest <path> -q`.
+- Запускай минимальный релевантный набор тестов из корня репозитория через `.venv`, например `.venv/bin/python -m pytest <path> -q`.
 - Не создавай или не изменяй production-код только ради того, чтобы тест прошёл, если задача ограничена тестами.
 
 ## Skills

@@ -7,8 +7,8 @@
 Требуется Node.js 22 или новее.
 
 ```bash
-npm install
-Copy-Item .env.example .env.local
+npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
