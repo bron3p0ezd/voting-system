@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,9 +9,17 @@ from apps.health.routers import router as health_router
 from apps.poll.routers import router as poll_router
 
 from config import settings
+from settings.redis import redis_client
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    await redis_client.aclose()
 
 
 app = FastAPI(
+    lifespan=lifespan,
     docs_url=settings.DOCS_URL_ENABLED,
     redoc_url=settings.REDOC_URL_ENABLED,
     openapi_url=settings.OPENAPI_URL_ENABLED,
