@@ -109,7 +109,9 @@ PostgreSQL в 100, оставляя запас 40 соединений. При �
 | Администрирование | `http://127.0.0.1/admin/polls` |
 | API через nginx | `http://127.0.0.1/api/v1` |
 | Health check | `http://127.0.0.1/api/health` |
-| OpenAPI | недоступна через nginx: текущая конфигурация проксирует только `/api/` |
+| Swagger UI | `http://127.0.0.1/docs` |
+| Redoc | `http://127.0.0.1/redoc` |
+| OpenAPI JSON | `http://127.0.0.1/openapi.json` |
 
 ## Туториал: ручной запуск
 
