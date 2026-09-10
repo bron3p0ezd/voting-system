@@ -123,17 +123,6 @@ npm run dev
 В Docker Compose для локальной демонстрации заданы `ADMIN_LOGIN=admin` и
 `ADMIN_PASSWORD=admin`; замените их перед любым внешним развёртыванием.
 
-## Кэш публичного опроса
-
-`GET /api/v1/polls/{poll_id}` использует cache-aside: сначала Redis, затем
-PostgreSQL при промахе. Найденный опрос сохраняется на
-`POLL_CACHE_TTL_SECONDS` (по умолчанию 60 секунд). Redis является необязательным
-ускорителем: при сетевой ошибке API читает PostgreSQL и не возвращает ошибку
-клиенту только из-за кэша. Проверка начала и завершения голосования остаётся в
-сервисе и выполняется в том числе для кэшированной записи.
-
-В Docker Compose Redis запускается без persistence: кэш можно безопасно потерять
-или очистить, поскольку источником истины остаётся PostgreSQL.
 
 ## Public API
 
@@ -252,12 +241,10 @@ POST /api/v1/polls/{poll_id}/votes
 
 ## Тестирование
 
-В backend добавлены отдельные тестовые зависимости `pytest`, `pytest-asyncio` и
-Locust. Они не входят в production-образ. После установки runtime-зависимостей
-установите тестовый набор и запускайте pytest из каталога `backend`:
+В backend добавлены `pytest`, `pytest-asyncio` и Locust. После установки
+зависимостей запускайте pytest из каталога `backend`:
 
 ```powershell
-.\.venv\Scripts\pip-sync requirements-test.txt
 .\.venv\Scripts\python -m pytest -q
 ```
 
@@ -278,8 +265,8 @@ PostgreSQL-базу: сценарий создаёт до 1,2 млн голос�
 ```powershell
 Set-Location backend
 $env:VOTING_LOAD_BASE_URL = "http://127.0.0.1"
-$env:VOTING_POLL_ID = "d49f586c-1e70-42e7-a395-51f60cd84ca0"
-$env:VOTING_OPTION_ID = "beb8980e-a9db-4159-a4c8-7fb6fbbfb872"
+$env:VOTING_POLL_ID = "UUID-опроса"
+$env:VOTING_OPTION_ID = "UUID-варианта"
 .\.venv\Scripts\python -m pytest src/tests/performance/test_voting_10k_rps.py -m performance -q
 ```
 
