@@ -81,6 +81,7 @@ class ServiceFactory:
             poll_repository=PollRepositoryImpl(self.__dbm.session),
             vote_repository=VoteRepositoryImpl(self.__dbm.session),
             dbm=self.__dbm,
+            poll_cache=self.get_poll_cache(),
         )
 
 

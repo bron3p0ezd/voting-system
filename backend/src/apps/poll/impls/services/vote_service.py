@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from uuid import UUID
 
-
-from apps.poll.dtos import VoteDTO
+from apps.poll.caches import PollCache
+from apps.poll.dtos import PollDTO, VoteDTO
 from apps.poll.exceptions import (
     DuplicateVoteException,
     InvalidVoteException,
@@ -22,10 +22,12 @@ class VoteServiceImpl(VoteService):
         poll_repository: PollRepository,
         vote_repository: VoteRepository,
         dbm: DBM,
+        poll_cache: PollCache,
     ) -> None:
         self.__poll_repository = poll_repository
         self.__vote_repository = vote_repository
         self.__dbm = dbm
+        self.__poll_cache = poll_cache
 
     async def record_vote(
         self,
@@ -33,7 +35,7 @@ class VoteServiceImpl(VoteService):
         participant_id: UUID,
         option_ids: list[UUID],
     ) -> VoteDTO:
-        poll = await self.__poll_repository.get_by_id(poll_id)
+        poll = await self.__get_poll(poll_id)
         if poll is None:
             raise PollNotFoundException
 
@@ -61,7 +63,16 @@ class VoteServiceImpl(VoteService):
 
         return vote
 
-   
+    async def __get_poll(self, poll_id: UUID) -> PollDTO | None:
+        poll = await self.__poll_cache.get(poll_id)
+        if poll is not None:
+            return poll
+
+        poll = await self.__poll_repository.get_by_id(poll_id)
+        if poll is not None:
+            await self.__poll_cache.set(poll)
+        return poll
+
     def __validate_selection(
         self,
         option_ids: list[UUID],
