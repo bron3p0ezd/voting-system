@@ -5,3 +5,6 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 python_files = ["*_test.py", "test_*.py", "*_tests.py"]
 addopts = "-rA -s --import-mode=importlib"
+markers = [
+    "performance: нагрузочный тест, обращающийся к явно указанному внешнему стенду",
+]

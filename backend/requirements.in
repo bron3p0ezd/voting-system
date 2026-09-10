@@ -4,6 +4,10 @@ fastapi==0.141.1
 pydantic==2.13.5
 pydantic-settings==2.15.0
 PyJWT[crypto]==2.13.0
+redis==8.1.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
 python-json-logger==4.2.0
 sqlalchemy[asyncio]==2.0.52
 uvicorn[standard]==0.52.4
+locust==2.46.5

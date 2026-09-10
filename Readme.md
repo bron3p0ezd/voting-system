@@ -17,7 +17,7 @@
 | Часть | Технологии | Почему выбраны |
 |---|---|---|
 | Backend | Python 3.13, FastAPI, Pydantic | FastAPI даёт типизированные HTTP-контракты и автоматическую OpenAPI-документацию, а Pydantic валидирует входные данные до выполнения бизнес-логики. |
-| Данные | PostgreSQL, SQLAlchemy 2.0 async, asyncpg, Alembic | PostgreSQL поддерживает транзакции и уникальные ограничения для конкурентно-безопасного базового учёта одного голоса; SQLAlchemy отделяет работу с БД от доменной логики, а Alembic версионирует схему. |
+| Данные | PostgreSQL, Redis, SQLAlchemy 2.0 async, asyncpg, Alembic | PostgreSQL поддерживает транзакции и уникальные ограничения для конкурентно-безопасного базового учёта одного голоса; Redis кэширует публичные данные опроса, а SQLAlchemy и Alembic отделяют доступ к данным и версионируют схему. |
 | Frontend | React, TypeScript, Vite, Tailwind CSS | React подходит для интерактивных форм голосования и администрирования, TypeScript описывает контракты API на клиенте, Vite упрощает локальную разработку и сборку, Tailwind CSS — единообразное оформление без отдельного набора CSS-компонентов. |
 | Развёртывание | Docker Compose, nginx | Compose воспроизводимо поднимает локальные PostgreSQL, API и интерфейс; nginx отдаёт собранный frontend и проксирует запросы `/api/` к backend через единый адрес. |
 
@@ -39,6 +39,28 @@ docker compose up --build -d
 docker compose ps
 ```
 
+### Пул соединений и масштабирование API
+
+
+Запустите две реплики API так:
+
+```powershell
+docker compose up --build -d --scale backend=2
+docker compose ps
+```
+
+Это даёт максимум `2 реплики × 2 worker × (10 + 5) = 60` соединений и оставляет
+запас до 80. Nginx динамически разрешает имя сервиса `backend` в Docker DNS и
+распределяет запросы между репликами. Перед увеличением числа реплик, workers или
+размера пула сначала пересчитайте условие:
+
+```text
+реплики × workers × (pool_size + max_overflow) <= безопасный лимит PostgreSQL
+```
+
+Миграции выполняет одноразовый сервис `migrate` до старта API; это исключает
+одновременный запуск Alembic всеми репликами.
+
 | Назначение | Адрес |
 |---|---|
 | Интерфейс | `http://127.0.0.1/` |
@@ -52,9 +74,10 @@ docker compose ps
 Для разработки без контейнеров нужны Python 3.13, PostgreSQL и Node.js 22 или
 новее. Откройте два PowerShell-окна: одно для backend, другое для frontend.
 
-### 1. Подготовьте PostgreSQL и backend
+### 1. Подготовьте PostgreSQL, Redis и backend
 
-Создайте пустую базу PostgreSQL и пользователя с правами на неё. Затем создайте
+Создайте пустую базу PostgreSQL, пользователя с правами на неё и запустите Redis.
+Затем создайте
 `backend/src/envs/.env` в UTF-8 без BOM. Этот файл содержит локальные секреты и
 не должен попадать в Git. Все перечисленные параметры обязательны:
 
@@ -64,6 +87,14 @@ DB_PORT=5432
 DB_USER=voting
 DB_PASS=replace-with-local-password
 DB_NAME=voting
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT_SECONDS=30
+DB_POOL_PRE_PING=true
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_DB=0
+POLL_CACHE_TTL_SECONDS=60
 ADMIN_JWT_SECRET=replace-with-random-local-secret
 ADMIN_LOGIN=admin
 ADMIN_PASSWORD=replace-with-local-admin-password
@@ -117,6 +148,7 @@ npm run dev
 
 В Docker Compose для локальной демонстрации заданы `ADMIN_LOGIN=admin` и
 `ADMIN_PASSWORD=admin`; замените их перед любым внешним развёртыванием.
+
 
 ## Public API
 
@@ -221,6 +253,12 @@ POST /api/v1/polls/{poll_id}/votes
 ```
 
 `201 Created` возвращается только после устойчивого сохранения голоса.
+Параметры опроса и допустимые варианты для этой проверки берутся из Redis-кэша;
+при промахе они загружаются из PostgreSQL и кэшируются. Сама запись выполняется
+одной PostgreSQL-командой: она повторно проверяет принадлежность вариантов,
+создаёт голос через `INSERT ... ON CONFLICT DO NOTHING` и добавляет выбранные
+варианты. Затем сервис выполняет commit и только после его успешного завершения
+возвращает `201`.
 
 ### Status codes
 
@@ -232,6 +270,58 @@ POST /api/v1/polls/{poll_id}/votes
 | `404` | Опрос не найден |
 | `409` | Участник уже проголосовал |
 | `410` | Голосование ещё не началось или уже завершилось |
+
+## Тестирование
+
+В backend добавлены `pytest`, `pytest-asyncio` и Locust. После установки
+зависимостей запускайте pytest из каталога `backend`:
+
+```powershell
+.\.venv\Scripts\python -m pytest -q
+```
+
+### Раздельное измерение GET и POST
+
+`src/tests/performance/test_voting_load_profile.py` запускает два независимых
+Locust-теста только при явно заданном целевом стенде:
+
+- `test_get_poll_reports_throughput` измеряет только
+  `GET /api/v1/polls/{poll_id}` и для каждого запроса получает новую cookie;
+- `test_create_vote_reports_throughput` измеряет только
+  `POST /api/v1/polls/{poll_id}/votes`. Уникальные participant JWT создаются
+  внутри генератора нагрузки и не требуют подготовительного GET-запроса.
+
+Тесты не содержат минимального требования к RPS, error rate или p95. После
+прогона каждый печатает строку `PERFORMANCE_RESULT` с числом успешных запросов,
+фактической длительностью измерения, успешными RPS, error rate и p95. Техническая
+ошибка Locust или ошибочные HTTP-ответы по-прежнему делают соответствующий тест
+неуспешным.
+
+Перед запуском создайте отдельный активный single-choice опрос и возьмите UUID
+опроса и его варианта. Для POST-only теста передайте генератору тот же тестовый
+секрет participant JWT, который настроен на стенде. Не используйте production-
+секрет. Нагрузочный стенд должен использовать отдельную тестовую PostgreSQL-базу:
+POST-only сценарий создаёт новый устойчиво записанный голос на каждом запросе.
+
+```powershell
+Set-Location backend
+$env:VOTING_LOAD_BASE_URL = "http://127.0.0.1"
+$env:VOTING_POLL_ID = "UUID-опроса"
+$env:VOTING_OPTION_ID = "UUID-варианта"
+$env:VOTING_PARTICIPANT_JWT_SECRET = "тестовый-секрет-стенда"
+.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -q
+```
+
+Можно запустить только одно измерение:
+
+```powershell
+.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k get_poll -q
+.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_load_profile.py -m performance -k create_vote -q
+```
+
+Каждый тест запускает 1 667 одновременных пользователей. Это уровень создаваемой
+конкуренции, а не обещание получить 1 667 RPS. Измерение начинается после запуска
+всех пользователей и продолжается примерно 60 секунд.
 
 ## Admin API
 

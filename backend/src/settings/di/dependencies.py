@@ -8,8 +8,10 @@ from apps.admin_poll.impls.repositories.admin_poll_statistics_repository import 
 )
 from apps.admin_poll.impls.services.admin_poll_service import AdminPollServiceImpl
 from apps.admin_poll.services import AdminPollService
+from apps.poll.caches import PollCache
 from apps.poll.impls.repositories.poll_repository import PollRepositoryImpl
 from apps.poll.impls.repositories.vote_repository import VoteRepositoryImpl
+from apps.poll.impls.caches.redis_poll_cache import RedisPollCache
 from apps.auth.impls.services.jwt_service import JWTServiceImpl
 from apps.auth.impls.services.admin_auth_service import AdminAuthServiceImpl
 from apps.auth.policies import ADMIN_TOKEN_EXPIRES_IN_MINUTES, AdminTokenPolicy
@@ -26,6 +28,8 @@ from apps.poll.services import (
     VoteService,
 )
 from settings.db_manager import DBM, get_sql_dbm
+from settings.redis import redis_cache_client
+from config import settings
 
 
 class ServiceFactory:
@@ -34,7 +38,10 @@ class ServiceFactory:
 
     def get_poll_service(self) -> PollService:
         repository = PollRepositoryImpl(self.__dbm.session)
-        return PollServiceImpl(repository)
+        return PollServiceImpl(repository, self.get_poll_cache())
+
+    def get_poll_cache(self) -> PollCache:
+        return RedisPollCache(redis_cache_client, settings.POLL_CACHE_TTL_SECONDS)
 
     def get_admin_poll_service(self) -> AdminPollService:
         repository = AdminPollRepositoryImpl(self.__dbm.session)
@@ -74,6 +81,7 @@ class ServiceFactory:
             poll_repository=PollRepositoryImpl(self.__dbm.session),
             vote_repository=VoteRepositoryImpl(self.__dbm.session),
             dbm=self.__dbm,
+            poll_cache=self.get_poll_cache(),
         )
 
 
