@@ -17,7 +17,7 @@
 | Часть | Технологии | Почему выбраны |
 |---|---|---|
 | Backend | Python 3.13, FastAPI, Pydantic | FastAPI даёт типизированные HTTP-контракты и автоматическую OpenAPI-документацию, а Pydantic валидирует входные данные до выполнения бизнес-логики. |
-| Данные | PostgreSQL, SQLAlchemy 2.0 async, asyncpg, Alembic | PostgreSQL поддерживает транзакции и уникальные ограничения для конкурентно-безопасного базового учёта одного голоса; SQLAlchemy отделяет работу с БД от доменной логики, а Alembic версионирует схему. |
+| Данные | PostgreSQL, Redis, SQLAlchemy 2.0 async, asyncpg, Alembic | PostgreSQL поддерживает транзакции и уникальные ограничения для конкурентно-безопасного базового учёта одного голоса; Redis кэширует публичные данные опроса, а SQLAlchemy и Alembic отделяют доступ к данным и версионируют схему. |
 | Frontend | React, TypeScript, Vite, Tailwind CSS | React подходит для интерактивных форм голосования и администрирования, TypeScript описывает контракты API на клиенте, Vite упрощает локальную разработку и сборку, Tailwind CSS — единообразное оформление без отдельного набора CSS-компонентов. |
 | Развёртывание | Docker Compose, nginx | Compose воспроизводимо поднимает локальные PostgreSQL, API и интерфейс; nginx отдаёт собранный frontend и проксирует запросы `/api/` к backend через единый адрес. |
 
@@ -52,9 +52,10 @@ docker compose ps
 Для разработки без контейнеров нужны Python 3.13, PostgreSQL и Node.js 22 или
 новее. Откройте два PowerShell-окна: одно для backend, другое для frontend.
 
-### 1. Подготовьте PostgreSQL и backend
+### 1. Подготовьте PostgreSQL, Redis и backend
 
-Создайте пустую базу PostgreSQL и пользователя с правами на неё. Затем создайте
+Создайте пустую базу PostgreSQL, пользователя с правами на неё и запустите Redis.
+Затем создайте
 `backend/src/envs/.env` в UTF-8 без BOM. Этот файл содержит локальные секреты и
 не должен попадать в Git. Все перечисленные параметры обязательны:
 
@@ -64,6 +65,10 @@ DB_PORT=5432
 DB_USER=voting
 DB_PASS=replace-with-local-password
 DB_NAME=voting
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_DB=0
+POLL_CACHE_TTL_SECONDS=60
 ADMIN_JWT_SECRET=replace-with-random-local-secret
 ADMIN_LOGIN=admin
 ADMIN_PASSWORD=replace-with-local-admin-password
@@ -117,6 +122,18 @@ npm run dev
 
 В Docker Compose для локальной демонстрации заданы `ADMIN_LOGIN=admin` и
 `ADMIN_PASSWORD=admin`; замените их перед любым внешним развёртыванием.
+
+## Кэш публичного опроса
+
+`GET /api/v1/polls/{poll_id}` использует cache-aside: сначала Redis, затем
+PostgreSQL при промахе. Найденный опрос сохраняется на
+`POLL_CACHE_TTL_SECONDS` (по умолчанию 60 секунд). Redis является необязательным
+ускорителем: при сетевой ошибке API читает PostgreSQL и не возвращает ошибку
+клиенту только из-за кэша. Проверка начала и завершения голосования остаётся в
+сервисе и выполняется в том числе для кэшированной записи.
+
+В Docker Compose Redis запускается без persistence: кэш можно безопасно потерять
+или очистить, поскольку источником истины остаётся PostgreSQL.
 
 ## Public API
 
@@ -232,6 +249,53 @@ POST /api/v1/polls/{poll_id}/votes
 | `404` | Опрос не найден |
 | `409` | Участник уже проголосовал |
 | `410` | Голосование ещё не началось или уже завершилось |
+
+## Тестирование
+
+В backend добавлены отдельные тестовые зависимости `pytest`, `pytest-asyncio` и
+Locust. Они не входят в production-образ. После установки runtime-зависимостей
+установите тестовый набор и запускайте pytest из каталога `backend`:
+
+```powershell
+.\.venv\Scripts\pip-sync requirements-test.txt
+.\.venv\Scripts\python -m pytest -q
+```
+
+### Нагрузка 10 000 RPS
+
+`src/tests/performance/test_voting_10k_rps.py` запускает Locust как pytest-тест
+только при явно заданном целевом стенде. Это предотвращает случайную генерацию
+нагрузки на локальный или внешний адрес. Сценарий каждого виртуального участника
+раз в секунду открывает `GET /api/v1/polls/{poll_id}`, получает новую
+`participant_token`, а затем отправляет `POST /api/v1/polls/{poll_id}/votes` с
+одним вариантом. Поэтому 10 000 пользователей создают цель в 10 000 RPS для
+каждого из двух endpoint'ов, а голоса не дублируются.
+
+Перед запуском создайте отдельный активный single-choice опрос и возьмите UUID
+опроса и его варианта. Нагрузочный стенд должен использовать отдельную тестовую
+PostgreSQL-базу: сценарий создаёт до 1,2 млн голосов за один запуск.
+
+```powershell
+Set-Location backend
+$env:VOTING_LOAD_BASE_URL = "http://127.0.0.1"
+$env:VOTING_POLL_ID = "d49f586c-1e70-42e7-a395-51f60cd84ca0"
+$env:VOTING_OPTION_ID = "beb8980e-a9db-4159-a4c8-7fb6fbbfb872"
+.\.venv\Scripts\python -m pytest src/tests/performance/test_voting_10k_rps.py -m performance -q
+```
+
+Тест длится 120 секунд, запускает 10 000 пользователей со скоростью 2 000
+пользователей в секунду и завершится с ошибкой, если любой endpoint вернёт ошибку
+либо его текущая скорость в конце прогона будет меньше 10 000 RPS. Cookie
+передаётся нагрузочным клиентом явно: production-cookie имеет флаг `Secure`, а
+локальный HTTP-стенд иначе её не отправляет.
+
+Результат одного запуска не является заявлением о производительности. Для
+подтверждения характеристики фиксируйте вместе с итогом версию образа, число
+uvicorn workers, конфигурацию PostgreSQL и connection pool, CPU/RAM, сетевую
+топологию, длительность прогрева и вывод Locust. Если один генератор нагрузки
+не удерживает 10 000 RPS, запускайте Locust в distributed-режиме с отдельными
+workers и не интерпретируйте ограничение генератора как пропускную способность
+сервиса.
 
 ## Admin API
 
